@@ -26,9 +26,6 @@ jobs:
               with:
                   fetch-depth: 1
 
-            - name: Install Cosign
-              uses: sigstore/cosign-installer@main
-
             - name: Set up QEMU
               uses: docker/setup-qemu-action@v2
             - name: Set up Docker Buildx
