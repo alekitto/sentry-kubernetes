@@ -5,7 +5,7 @@
 # Installation:
 
 ```console
-$ helm install oci://ghcr.io/alekitto/sentry-kubernetes release-name --set sentry.dsn=<your-dsn>
+$ helm install oci://ghcr.io/alekitto/sentry-kubernetes-chart/sentry-kubernetes release-name --set sentry.dsn=<your-dsn>
 ```
 
 ## Configuration
