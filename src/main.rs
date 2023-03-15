@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    let log_level = env::var("LOG_LEVEL").unwrap_or("ERROR".to_string());
+    let log_level = env::var("LOG_LEVEL").unwrap_or("INFO".to_string());
     let log_level = matches.opt_get_default("l", log_level).unwrap();
     let log_level = LevelFilter::from_str(&log_level).unwrap_or(LevelFilter::Error);
     SimpleLogger::new().with_level(log_level).init().unwrap();
