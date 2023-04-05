@@ -58,6 +58,8 @@ jobs:
               name: Extract docker image metadata
               uses: docker/metadata-action@v4.3.0
               with:
+                  tags: |
+                      type=raw,value=latest,enable={{is_default_branch}}
                   images: |
                       ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
                       public.ecr.aws/${{ github.repository_owner }}/${{ github.event.repository.name }}

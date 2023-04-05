@@ -6,9 +6,10 @@ COPY . /app
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
-    cargo build --release
+    cargo build --release && \
+    cp /app/target/release/sentry-kubernetes /
 
 FROM gcr.io/distroless/cc
 
-COPY --from=build-env /app/target/release/sentry-kubernetes /
+COPY --from=build-env /sentry-kubernetes /
 CMD ["/sentry-kubernetes"]
