@@ -49,23 +49,23 @@ spec:
           {{- end }}
           {{- if .Values.sentry.filters.namespaces }}
           - name: EVENT_NAMESPACES
-            value: {{ .Values.sentry.filters.namespaces | join ',' | quote }}
+            value: {{ join "," .Values.sentry.filters.namespaces | quote }}
           {{- end }}
           {{- if .Values.sentry.filters.excludeNamespaces }}
           - name: EVENT_NAMESPACES_EXCLUDED
-            value: {{ .Values.sentry.filters.excludeNamespaces | join ',' | quote }}
+            value: {{ join "," .Values.sentry.filters.excludeNamespaces | quote }}
           {{- end }}
           {{- if .Values.sentry.filters.excludeComponents }}
           - name: COMPONENT_FILTER
-            value: {{ .Values.sentry.filters.excludeComponents | join ',' | quote }}
+            value: {{ join "," .Values.sentry.filters.excludeComponents | quote }}
           {{- end }}
           {{- if .Values.sentry.filters.excludeReasons }}
           - name: REASON_FILTER
-            value: {{ .Values.sentry.filters.excludeReasons | join ',' | quote }}
+            value: {{ join "," .Values.sentry.filters.excludeReasons | quote }}
           {{- end }}
           {{- if .Values.sentry.filters.eventLevels }}
           - name: EVENT_LEVELS
-            value: {{ .Values.sentry.filters.eventLevels | join ',' | quote }}
+            value: {{ join "," .Values.sentry.filters.eventLevels | quote }}
           {{- end }}
         resources:
 {{ toYaml .Values.resources | indent 10 }}
