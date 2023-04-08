@@ -12,4 +12,4 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM gcr.io/distroless/cc
 
 COPY --from=build-env /sentry-kubernetes /
-CMD ["/sentry-kubernetes"]
+ENTRYPOINT ["/sentry-kubernetes"]

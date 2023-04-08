@@ -91,6 +91,8 @@ async fn watch_loop(client: Client) -> Result<()> {
     let exclude_namespaces = list_env("EVENT_NAMESPACES_EXCLUDED", None);
     let event_levels = list_env("EVENT_LEVELS", Some("warning,error".to_string()));
 
+    info!("Only reporting events of levels: {:?}", event_levels);
+
     let api = Api::<Event>::all(client);
     watcher(api, ListParams::default())
         .applied_objects()
@@ -107,7 +109,9 @@ async fn watch_loop(client: Client) -> Result<()> {
                 return Ok(());
             }
 
-            if event_levels.contains(&sentry_event.level.to_string())
+            if event_levels
+                .iter()
+                .any(|e| e == &sentry_event.level.to_string())
                 || sentry_event.level == Level::Error
             {
                 capture_event(sentry::protocol::Event::from(&sentry_event));
