@@ -157,3 +157,78 @@ impl From<&SentryEvent> for v7::Event<'_> {
         v7_event
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::sentry_event::SentryEvent;
+    use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
+    use k8s_openapi::chrono::DateTime;
+    use sentry::Level;
+
+    #[test]
+    pub fn test_from_kube_event_to_sentry_event() {
+        let event = Event {
+            action: None,
+            count: Some(2),
+            event_time: None,
+            first_timestamp: Some(Time(
+                DateTime::parse_from_rfc3339("2023-04-08T22:27:40Z")
+                    .unwrap()
+                    .into(),
+            )),
+            involved_object: ObjectReference {
+                api_version: Some("v1".to_string()),
+                field_path: Some("spec.containers{coredns}".to_string()),
+                kind: Some("Pod".to_string()),
+                name: Some("coredns-bbbc4b766-fv96b".to_string()),
+                namespace: Some("kube-system".to_string()),
+                resource_version: Some("355929156".to_string()),
+                uid: Some("f4f1a725-a5e8-4cdb-8a6f-cd02917a9056".to_string()),
+            },
+            last_timestamp: Some(Time(
+                DateTime::parse_from_rfc3339("2023-04-08T22:28:03Z")
+                    .unwrap()
+                    .into(),
+            )),
+            message: Some("Error: ImagePullBackOff".to_string()),
+            metadata: ObjectMeta {
+                annotations: None,
+                cluster_name: None,
+                creation_timestamp: Some(Time(
+                    DateTime::parse_from_rfc3339("2023-04-08T22:27:40Z")
+                        .unwrap()
+                        .into(),
+                )),
+                deletion_grace_period_seconds: None,
+                deletion_timestamp: None,
+                finalizers: None,
+                generate_name: None,
+                generation: None,
+                labels: None,
+                managed_fields: None,
+                name: Some("coredns-bbbc4b766-fv96b.17541619a910bfcd".to_string()),
+                namespace: Some("kube-system".to_string()),
+                owner_references: None,
+                resource_version: Some("355929325".to_string()),
+                self_link: None,
+                uid: Some("bd42879f-7761-4fa0-b802-dfcf8502c44e".to_string()),
+            },
+            reason: Some("Failed".to_string()),
+            related: None,
+            reporting_component: Some("".to_string()),
+            reporting_instance: Some("".to_string()),
+            series: None,
+            source: Some(EventSource {
+                component: Some("kubelet".to_string()),
+                host: None,
+            }),
+            type_: Some("Warning".to_string()),
+        };
+
+        let sentry_event = SentryEvent::from(event);
+        assert_eq!(sentry_event.level, Level::Warning);
+        assert_eq!(sentry_event.level.to_string(), "warning");
+        assert_eq!(sentry_event.type_, "warning");
+    }
+}

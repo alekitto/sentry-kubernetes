@@ -1,0 +1,26 @@
+name: tests
+
+on:
+    push:
+        branches:
+            - 'develop'
+    pull_request_target:
+        types: [ opened, synchronize ]
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.number || github.ref }}-tests
+    cancel-in-progress: true
+
+jobs:
+    tests:
+        name: Tests
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@master
+              with:
+                  fetch-depth: 1
+
+            - name: Setup Rust
+              uses: dtolnay/rust-toolchain@stable
+            - name: Run tests
+              run: cargo test --all-features

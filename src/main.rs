@@ -1,4 +1,4 @@
-use crate::sentry_event::SentryEvent;
+use crate::processor::Processor;
 use anyhow::Result;
 use futures::prelude::*;
 use getopts::Options;
@@ -9,14 +9,14 @@ use kube::{Api, Client};
 use lazy_static::lazy_static;
 use log::{debug, error, info, LevelFilter};
 use sentry::types::Dsn;
-use sentry::{add_breadcrumb, capture_event, Breadcrumb, Level};
+use sentry::Hub;
 use simple_logger::SimpleLogger;
-use std::collections::BTreeMap;
 use std::env;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::time::sleep;
 
+mod processor;
 mod sentry_event;
 
 lazy_static! {
@@ -91,52 +91,55 @@ async fn watch_loop(client: Client) -> Result<()> {
     let exclude_namespaces = list_env("EVENT_NAMESPACES_EXCLUDED", None);
     let event_levels = list_env("EVENT_LEVELS", Some("warning,error".to_string()));
 
-    info!("Only reporting events of levels: {:?}", event_levels);
+    info!("Only reporting events of levels: {:?}", &event_levels);
+    let processor = Processor::new(
+        event_namespaces,
+        exclude_components,
+        exclude_reasons,
+        exclude_namespaces,
+        event_levels,
+    );
 
     let api = Api::<Event>::all(client);
     watcher(api, ListParams::default())
         .applied_objects()
         .try_for_each(|event| async {
             debug!("event: {:#?}", event);
+            processor.process(event, |sentry_event| {
+                Hub::with_active(|hub| {
+                    hub.capture_event(sentry::protocol::Event::from(sentry_event));
+                    if let Some(client) = hub.client() {
+                        client.flush(None);
+                    }
+                });
+            });
 
-            let sentry_event = SentryEvent::from(event);
-            if exclude_components.contains(&sentry_event.component)
-                || exclude_reasons.contains(&sentry_event.reason)
-                || exclude_namespaces.contains(&sentry_event.namespace)
-                || (!event_namespaces.is_empty()
-                    && !event_namespaces.contains(&sentry_event.namespace))
-            {
-                return Ok(());
-            }
-
-            if event_levels
-                .iter()
-                .any(|e| e == &sentry_event.level.to_string())
-                || sentry_event.level == Level::Error
-            {
-                capture_event(sentry::protocol::Event::from(&sentry_event));
-            }
-
-            let mut breadcrumb = Breadcrumb {
-                data: {
-                    let mut map = BTreeMap::new();
-                    map.insert("name".into(), sentry_event.name.into());
-                    map.insert("namespace".into(), sentry_event.namespace.into());
-                    map
-                },
-                level: sentry_event.level,
-                message: sentry_event.message,
-                ..Default::default()
-            };
-
-            if let Some(timestamp) = sentry_event.creation_timestamp {
-                breadcrumb.timestamp = timestamp;
-            }
-
-            add_breadcrumb(breadcrumb);
             Ok(())
         })
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::list_env;
+
+    #[test]
+    pub fn test_list_env() {
+        let def_list = list_env(
+            "THIS_SHOULD_NOT_BE_DEFINED",
+            Some("warning,error".to_string()),
+        );
+        assert_eq!(def_list, vec!["warning".to_string(), "error".to_string()]);
+
+        let def_list = list_env(
+            "THIS_SHOULD_NOT_BE_DEFINED",
+            Some("warning,,,x,,error".to_string()),
+        );
+        assert_eq!(
+            def_list,
+            vec!["warning".to_string(), "x".to_string(), "error".to_string()]
+        );
+    }
 }
