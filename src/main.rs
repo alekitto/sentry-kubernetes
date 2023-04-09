@@ -9,7 +9,6 @@ use kube::{Api, Client};
 use lazy_static::lazy_static;
 use log::{debug, error, info, LevelFilter};
 use sentry::types::Dsn;
-use sentry::Hub;
 use simple_logger::SimpleLogger;
 use std::env;
 use std::str::FromStr;
