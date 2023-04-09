@@ -4,15 +4,6 @@ use log::debug;
 use sentry::{add_breadcrumb, Breadcrumb, Level};
 use std::collections::BTreeMap;
 
-/**
-
-    let event_namespaces = list_env("EVENT_NAMESPACES", None);
-    let exclude_components = list_env("COMPONENT_FILTER", None);
-    let exclude_reasons = list_env("REASON_FILTER", None);
-    let exclude_namespaces = list_env("EVENT_NAMESPACES_EXCLUDED", None);
-    let event_levels = list_env("EVENT_LEVELS", Some("warning,error".to_string()));
-*/
-
 pub struct Processor {
     event_namespaces: Vec<String>,
     exclude_components: Vec<String>,

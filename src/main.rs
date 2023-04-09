@@ -76,7 +76,7 @@ fn list_env(name: &str, default: Option<String>) -> Vec<String> {
 async fn watch_loop(client: Client) -> Result<()> {
     info!("Initializing Sentry client");
     let dsn = Dsn::from_str(&SENTRY_DSN)?;
-    let _ = sentry::init(sentry::ClientOptions {
+    let _sentry = sentry::init(sentry::ClientOptions {
         dsn: Some(dsn),
         environment: Some(ENV.clone().into()),
         release: Some(RELEASE.clone().into()),
@@ -106,12 +106,7 @@ async fn watch_loop(client: Client) -> Result<()> {
         .try_for_each(|event| async {
             debug!("event: {:#?}", event);
             processor.process(event, |sentry_event| {
-                Hub::with_active(|hub| {
-                    hub.capture_event(sentry::protocol::Event::from(sentry_event));
-                    if let Some(client) = hub.client() {
-                        client.flush(None);
-                    }
-                });
+                sentry::capture_event(sentry::protocol::Event::from(sentry_event));
             });
 
             Ok(())
