@@ -77,8 +77,16 @@ async fn watch_loop(client: Client) -> Result<()> {
     let dsn = Dsn::from_str(&SENTRY_DSN)?;
     let _sentry = sentry::init(sentry::ClientOptions {
         dsn: Some(dsn),
-        environment: Some(ENV.clone().into()),
-        release: Some(RELEASE.clone().into()),
+        environment: if ENV.is_empty() {
+            None
+        } else {
+            Some(ENV.clone().into())
+        },
+        release: if RELEASE.is_empty() {
+            None
+        } else {
+            Some(RELEASE.clone().into())
+        },
         ..Default::default()
     });
 
