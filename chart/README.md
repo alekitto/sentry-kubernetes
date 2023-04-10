@@ -12,16 +12,21 @@ $ helm install oci://ghcr.io/alekitto/sentry-kubernetes-chart/sentry-kubernetes 
 
 The following table lists the configurable parameters of the sentry-kubernetes chart and their default values.
 
-| Parameter               | Description                                                                                                                 | Default                       |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `sentry.dsn`            | Sentry dsn                                                                                                                  | Empty                         |
-| `existingSecret`        | Existing secret to read DSN from                                                                                            | Empty                         |
-| `sentry.environment`    | Sentry environment                                                                                                          | Empty                         |
-| `sentry.release`        | Sentry release                                                                                                              | Empty                         |
-| `sentry.logLevel`       | Sentry log level                                                                                                            | Empty                         |
-| `image.repository`      | Container image name                                                                                                        | `getsentry/sentry-kubernetes` |
-| `image.tag`             | Container image tag                                                                                                         | `latest`                      |
-| `rbac.create`           | If `true`, create and use RBAC resources                                                                                    | `true`                        |
-| `serviceAccount.name`   | Service account to be used. If not set and serviceAccount.create is `true`, a name is generated using the fullname template | ``                            |
-| `serviceAccount.create` | If true, create a new service account                                                                                       | `true`                        |
-| `priorityClassName`     | pod priorityClassName                                                                                                       | Empty                         |
+| Parameter                   | Description                                                                                                                 | Default                       |
+|-----------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------|
+| `sentry.dsn`                | Sentry dsn                                                                                                                  | Empty                         |
+| `existingSecret`            | Existing secret to read DSN from                                                                                            | Empty                         |
+| `sentry.environment`        | Sentry environment                                                                                                          | Empty                         |
+| `sentry.release`            | Sentry release                                                                                                              | Empty                         |
+| `sentry.logLevel`           | Sentry log level                                                                                                            | Empty                         |
+| `image.repository`          | Container image name                                                                                                        | `getsentry/sentry-kubernetes` |
+| `image.tag`                 | Container image tag                                                                                                         | `latest`                      |
+| `rbac.create`               | If `true`, create and use RBAC resources                                                                                    | `true`                        |
+| `serviceAccount.name`       | Service account to be used. If not set and serviceAccount.create is `true`, a name is generated using the fullname template | ``                            |
+| `serviceAccount.create`     | If true, create a new service account                                                                                       | `true`                        |
+| `priorityClassName`         | pod priorityClassName                                                                                                       | Empty                         |
+| `filters.namespaces`        | Only report events from these namespaces                                                                                    | Empty                         |
+| `filters.excludeNamespaces` | Do not report events from these namespaces                                                                                  | Empty                         |
+| `filters.excludeComponents` | Do not report events from these components                                                                                  | Empty                         |
+| `filters.excludeReasons`    | Do not report events with these reasons (error codes)                                                                       | Empty                         |
+| `filters.eventLevels`       | Only report events of these levels. "error" events are always reported.                                                     | [ `warning`, `error` ]        |
