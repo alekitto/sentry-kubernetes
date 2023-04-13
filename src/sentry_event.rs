@@ -3,6 +3,7 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use lazy_static::lazy_static;
 use sentry::protocol::ClientSdkInfo;
 use sentry::types::protocol::v7;
+use sentry::types::Uuid;
 use sentry::Level;
 use serde_json::{to_value, Value};
 use std::borrow::Borrow;
@@ -27,6 +28,7 @@ lazy_static! {
 }
 
 pub struct SentryEvent {
+    pub uid: Uuid,
     pub type_: String,
     pub level: Level,
     pub component: String,
@@ -84,6 +86,11 @@ impl From<Event> for SentryEvent {
         };
 
         Self {
+            uid: meta
+                .uid
+                .as_ref()
+                .and_then(|str| Uuid::parse_str(str).ok())
+                .unwrap_or_default(),
             type_: event_type,
             level: Level::from_str(&level).unwrap(),
             component: value
@@ -142,6 +149,7 @@ impl From<&SentryEvent> for v7::Event<'_> {
         }
 
         let mut v7_event = v7::Event::new();
+        v7_event.event_id = value.uid;
         v7_event.message = value.message.clone();
         v7_event.culprit = Some(format!("{} {}", value.obj_name(), value.reason));
         v7_event.server_name = Some(value.source_host.clone().into());
