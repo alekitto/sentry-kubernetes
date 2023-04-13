@@ -105,6 +105,9 @@ async fn watch_loop(client: Client) -> Result<()> {
         exclude_reasons,
         exclude_namespaces,
         event_levels,
+        |sentry_event| {
+            sentry::capture_event(sentry::protocol::Event::from(sentry_event));
+        },
     );
 
     let api = Api::<Event>::all(client);
@@ -112,9 +115,7 @@ async fn watch_loop(client: Client) -> Result<()> {
         .applied_objects()
         .try_for_each(|event| async {
             debug!("event: {:#?}", event);
-            processor.process(event, |sentry_event| {
-                sentry::capture_event(sentry::protocol::Event::from(sentry_event));
-            });
+            processor.process(event);
 
             Ok(())
         })
