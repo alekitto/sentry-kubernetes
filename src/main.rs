@@ -3,7 +3,6 @@ use anyhow::Result;
 use futures::prelude::*;
 use getopts::Options;
 use k8s_openapi::api::core::v1::Event;
-use kube::api::ListParams;
 use kube::runtime::{watcher, WatchStreamExt};
 use kube::{Api, Client};
 use lazy_static::lazy_static;
@@ -106,15 +105,16 @@ async fn watch_loop(client: Client) -> Result<()> {
         exclude_namespaces,
         event_levels,
         |sentry_event| {
-            sentry::capture_event(sentry::protocol::Event::from(sentry_event));
+            let uuid = sentry::capture_event(sentry::protocol::Event::from(sentry_event));
+            debug!(target: "sentry_kubernetes::sentry_client", "Captured event (uuid = {})", uuid);
         },
     );
 
     let api = Api::<Event>::all(client);
-    watcher(api, ListParams::default())
+    watcher(api, Default::default())
         .applied_objects()
         .try_for_each(|event| async {
-            debug!("event: {:#?}", event);
+            debug!(target: "sentry_kubernetes::kubernetes_event_watcher", "Processing event: {:#?}", event);
             processor.process(event);
 
             Ok(())

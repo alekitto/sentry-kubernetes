@@ -1,4 +1,4 @@
-FROM public.ecr.aws/docker/library/rust:1.68.0-bullseye as build-env
+FROM public.ecr.aws/docker/library/rust:1.71.0-bullseye as build-env
 
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 ARG TARGETPLATFORM

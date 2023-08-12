@@ -68,7 +68,7 @@ impl<F: Fn(&SentryEvent)> Processor<F> {
                 }
             }
 
-            let _ = last_ts.insert(ts.clone());
+            let _ = last_ts.insert(ts);
         }
 
         if self
@@ -77,6 +77,7 @@ impl<F: Fn(&SentryEvent)> Processor<F> {
             .any(|e| e == &sentry_event.level.to_string())
             || sentry_event.level == Level::Error
         {
+            debug!("sending event to sentry");
             (self.sender)(&sentry_event);
         } else {
             debug!("excluded by event level");

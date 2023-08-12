@@ -6,10 +6,10 @@ use sentry::types::protocol::v7;
 use sentry::types::Uuid;
 use sentry::Level;
 use serde_json::{to_value, Value};
-use std::borrow::Borrow;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::env;
+use std::ops::Deref;
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -153,7 +153,7 @@ impl From<&SentryEvent> for v7::Event<'_> {
         v7_event.message = value.message.clone();
         v7_event.culprit = Some(format!("{} {}", value.obj_name(), value.reason));
         v7_event.server_name = Some(value.source_host.clone().into());
-        v7_event.sdk = Some(Cow::Borrowed(SDK_VALUE.borrow()));
+        v7_event.sdk = Some(Cow::Borrowed(SDK_VALUE.deref()));
         if let Some(timestamp) = value.creation_timestamp {
             v7_event.timestamp = timestamp;
         }
