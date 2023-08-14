@@ -3,8 +3,6 @@ use k8s_openapi::api::core::v1::Event;
 use log::debug;
 use sentry::{add_breadcrumb, Breadcrumb, Level};
 use std::collections::BTreeMap;
-use std::sync::RwLock;
-use std::time::SystemTime;
 
 pub struct Processor<F: Fn(&SentryEvent)> {
     event_namespaces: Vec<String>,
@@ -13,7 +11,6 @@ pub struct Processor<F: Fn(&SentryEvent)> {
     exclude_namespaces: Vec<String>,
     event_levels: Vec<String>,
     sender: F,
-    last_event_ts: RwLock<Option<SystemTime>>,
 }
 
 impl<F: Fn(&SentryEvent)> Processor<F> {
@@ -32,7 +29,6 @@ impl<F: Fn(&SentryEvent)> Processor<F> {
             exclude_namespaces,
             event_levels,
             sender,
-            last_event_ts: RwLock::default(),
         }
     }
 
@@ -58,17 +54,6 @@ impl<F: Fn(&SentryEvent)> Processor<F> {
         {
             debug!("event not in monitored namespace");
             return;
-        }
-
-        if let Some(ts) = sentry_event.creation_timestamp {
-            let mut last_ts = self.last_event_ts.write().unwrap();
-            if let Some(last_ts) = *last_ts {
-                if last_ts < ts {
-                    return;
-                }
-            }
-
-            let _ = last_ts.insert(ts);
         }
 
         if self
@@ -109,7 +94,7 @@ mod tests {
     use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
     use k8s_openapi::chrono::DateTime;
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn generate_event() -> Event {
         Event {
@@ -189,35 +174,5 @@ mod tests {
 
         processor.process(event);
         assert_eq!(passed.load(Ordering::SeqCst), true);
-    }
-
-    #[test]
-    pub fn test_processor_should_not_send_past_events() {
-        let first_event = generate_event();
-        let mut second_event = generate_event();
-        second_event.metadata.creation_timestamp = Some(Time(
-            DateTime::parse_from_rfc3339("2023-04-07T22:27:40Z")
-                .unwrap()
-                .into(),
-        ));
-        let third_event = generate_event();
-
-        let passed = AtomicUsize::default();
-        let processor = Processor::new(
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-            vec!["warning".to_string(), "error".to_string()],
-            |_| {
-                passed.fetch_add(1, Ordering::SeqCst);
-            },
-        );
-
-        for event in [first_event, second_event, third_event] {
-            processor.process(event);
-        }
-
-        assert_eq!(passed.load(Ordering::SeqCst), 2);
     }
 }
