@@ -15,12 +15,13 @@ The following table lists the configurable parameters of the sentry-kubernetes c
 | Parameter                   | Description                                                                                                                 | Default                       |
 |-----------------------------|-----------------------------------------------------------------------------------------------------------------------------|-------------------------------|
 | `sentry.dsn`                | Sentry dsn                                                                                                                  | Empty                         |
-| `existingSecret`            | Existing secret to read DSN from                                                                                            | Empty                         |
+| `sentry.existingSecret`     | The name of the already existing secret containing the DSN                                                                  | Empty                         |
 | `sentry.environment`        | Sentry environment                                                                                                          | Empty                         |
 | `sentry.release`            | Sentry release                                                                                                              | Empty                         |
-| `sentry.logLevel`           | Sentry log level                                                                                                            | Empty                         |
+| `sentry.logLevel`           | The log level of this application (the sentry reporter)                                                                     | Empty                         |
 | `image.repository`          | Container image name                                                                                                        | `getsentry/sentry-kubernetes` |
 | `image.tag`                 | Container image tag                                                                                                         | `latest`                      |
+| `image.pullPolicy`          | Container pull policy                                                                                                       | `Always`                      |
 | `rbac.create`               | If `true`, create and use RBAC resources                                                                                    | `true`                        |
 | `serviceAccount.name`       | Service account to be used. If not set and serviceAccount.create is `true`, a name is generated using the fullname template | ``                            |
 | `serviceAccount.create`     | If true, create a new service account                                                                                       | `true`                        |
