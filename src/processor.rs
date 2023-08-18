@@ -1,5 +1,6 @@
 use crate::sentry_event::SentryEvent;
-use k8s_openapi::api::core::v1::Event;
+use k8s_openapi::api::core::v1::{Event, Node, Pod};
+use kube::{Api, Client};
 use log::debug;
 use sentry::{add_breadcrumb, Breadcrumb, Level};
 use std::collections::BTreeMap;
@@ -11,15 +12,86 @@ pub struct Processor<F: Fn(&SentryEvent)> {
     exclude_namespaces: Vec<String>,
     event_levels: Vec<String>,
     sender: F,
+
+    pod_api: Api<Pod>,
+    nodes_api: Api<Node>,
+}
+
+pub struct ProcessorBuilder<F: Fn(&SentryEvent)> {
+    event_namespaces: Vec<String>,
+    exclude_components: Vec<String>,
+    exclude_reasons: Vec<String>,
+    exclude_namespaces: Vec<String>,
+    event_levels: Vec<String>,
+    sender: F,
+    client: Client,
+}
+
+impl<F: Fn(&SentryEvent)> ProcessorBuilder<F> {
+    fn new(client: Client, sender: F) -> Self {
+        Self {
+            event_namespaces: Default::default(),
+            exclude_components: Default::default(),
+            exclude_reasons: Default::default(),
+            exclude_namespaces: Default::default(),
+            event_levels: Default::default(),
+            client,
+            sender,
+        }
+    }
+
+    #[must_use]
+    pub fn event_namespaces(mut self, include: Vec<String>, exclude: Vec<String>) -> Self {
+        self.event_namespaces = include;
+        self.exclude_namespaces = exclude;
+        self
+    }
+
+    #[must_use]
+    pub fn event_components(mut self, exclude: Vec<String>) -> Self {
+        self.exclude_components = exclude;
+        self
+    }
+
+    #[must_use]
+    pub fn event_reasons(mut self, exclude: Vec<String>) -> Self {
+        self.exclude_reasons = exclude;
+        self
+    }
+
+    #[must_use]
+    pub fn event_levels(mut self, levels: Vec<String>) -> Self {
+        self.event_levels = levels;
+        self
+    }
+}
+
+impl<F: Fn(&SentryEvent)> From<ProcessorBuilder<F>> for Processor<F> {
+    fn from(value: ProcessorBuilder<F>) -> Self {
+        Processor::new(
+            value.event_namespaces,
+            value.exclude_components,
+            value.exclude_reasons,
+            value.exclude_namespaces,
+            value.event_levels,
+            value.client,
+            value.sender,
+        )
+    }
 }
 
 impl<F: Fn(&SentryEvent)> Processor<F> {
-    pub fn new(
+    pub fn builder(client: Client, sender: F) -> ProcessorBuilder<F> {
+        ProcessorBuilder::new(client, sender)
+    }
+
+    fn new(
         event_namespaces: Vec<String>,
         exclude_components: Vec<String>,
         exclude_reasons: Vec<String>,
         exclude_namespaces: Vec<String>,
         event_levels: Vec<String>,
+        client: Client,
         sender: F,
     ) -> Self {
         Self {
@@ -29,11 +101,29 @@ impl<F: Fn(&SentryEvent)> Processor<F> {
             exclude_namespaces,
             event_levels,
             sender,
+
+            pod_api: Api::<Pod>::all(client.clone()),
+            nodes_api: Api::<Node>::all(client),
         }
     }
 
-    pub fn process(&self, event: Event) {
-        let sentry_event = SentryEvent::from(event);
+    pub async fn process(&self, event: Event) {
+        let mut sentry_event = SentryEvent::from(event);
+        let mut hostname = sentry_event.source_host;
+        if hostname.is_none() {
+            if sentry_event.kind.as_deref() == Some("Pod") {
+                if let Ok(pod) = self.pod_api.get(&sentry_event.name).await {
+                    hostname = pod.spec.and_then(|p| p.node_name);
+                }
+            }
+        }
+
+        if let Some(hostname) = hostname.as_deref() {
+            if let Ok(node) = self.nodes_api.get(hostname).await {
+                sentry_event.node_labels = node.metadata.labels.unwrap_or_default();
+            }
+        }
+
         if self.exclude_components.contains(&sentry_event.component) {
             debug!("excluded by component filter");
             return;
@@ -62,6 +152,8 @@ impl<F: Fn(&SentryEvent)> Processor<F> {
             .any(|e| e == &sentry_event.level.to_string())
             || sentry_event.level == Level::Error
         {
+            sentry_event.source_host = hostname;
+
             debug!("sending event to sentry");
             (self.sender)(&sentry_event);
         } else {
@@ -94,6 +186,7 @@ mod tests {
     use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
     use k8s_openapi::chrono::DateTime;
+    use kube::Client;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     fn generate_event() -> Event {
@@ -156,23 +249,25 @@ mod tests {
         }
     }
 
-    #[test]
-    pub fn test_processor_should_send_event() {
+    #[tokio::test]
+    pub async fn test_processor_should_send_event() {
         let event = generate_event();
         let passed = AtomicBool::new(false);
+        let client = Client::try_default().await.unwrap();
         let processor = Processor::new(
             vec![],
             vec![],
             vec![],
             vec![],
             vec!["warning".to_string(), "error".to_string()],
+            client,
             |se| {
                 assert_eq!(se.type_, "warning".to_string());
                 passed.store(true, Ordering::SeqCst);
             },
         );
 
-        processor.process(event);
+        processor.process(event).await;
         assert_eq!(passed.load(Ordering::SeqCst), true);
     }
 }

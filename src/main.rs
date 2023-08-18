@@ -98,24 +98,22 @@ async fn watch_loop(client: Client) -> Result<()> {
     let event_levels = list_env("EVENT_LEVELS", Some("warning,error".to_string()));
 
     info!("Only reporting events of levels: {:?}", &event_levels);
-    let processor = Processor::new(
-        event_namespaces,
-        exclude_components,
-        exclude_reasons,
-        exclude_namespaces,
-        event_levels,
-        |sentry_event| {
-            let uuid = sentry::capture_event(sentry::protocol::Event::from(sentry_event));
-            debug!(target: "sentry_kubernetes::sentry_client", "Captured event (uuid = {})", uuid);
-        },
-    );
+    let processor: Processor<_> = Processor::builder(client.clone(), |sentry_event| {
+        let uuid = sentry::capture_event(sentry::protocol::Event::from(sentry_event));
+        debug!(target: "sentry_kubernetes::sentry_client", "Captured event (uuid = {})", uuid);
+    })
+    .event_namespaces(event_namespaces, exclude_namespaces)
+    .event_components(exclude_components)
+    .event_reasons(exclude_reasons)
+    .event_levels(event_levels)
+    .into();
 
     let api = Api::<Event>::all(client);
     watcher(api, Default::default())
         .applied_objects()
         .try_for_each(|event| async {
             debug!(target: "sentry_kubernetes::kubernetes_event_watcher", "Processing event: {:#?}", event);
-            processor.process(event);
+            processor.process(event).await;
 
             Ok(())
         })

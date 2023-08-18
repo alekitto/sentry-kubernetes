@@ -5,7 +5,7 @@ use sentry::protocol::ClientSdkInfo;
 use sentry::types::protocol::v7;
 use sentry::types::Uuid;
 use sentry::Level;
-use serde_json::{to_value, Value};
+use serde_json::{to_value, Map, Value};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::env;
@@ -32,7 +32,7 @@ pub struct SentryEvent {
     pub type_: String,
     pub level: Level,
     pub component: String,
-    pub source_host: String,
+    pub source_host: Option<String>,
     pub reason: String,
     pub metadata: ObjectMeta,
     pub namespace: String,
@@ -40,6 +40,7 @@ pub struct SentryEvent {
     pub name: String,
     pub message: Option<String>,
     pub creation_timestamp: Option<SystemTime>,
+    pub node_labels: BTreeMap<String, String>,
 }
 
 impl SentryEvent {
@@ -98,10 +99,13 @@ impl From<Event> for SentryEvent {
                 .as_ref()
                 .and_then(|s| s.component.clone())
                 .unwrap_or_default(),
-            source_host: value
-                .source
-                .and_then(|s| s.host)
-                .unwrap_or("n/a".to_string()),
+            source_host: value.source.and_then(|s| s.host).or_else(|| {
+                if value.involved_object.kind.as_deref() == Some("Node") {
+                    value.involved_object.name.clone()
+                } else {
+                    None
+                }
+            }),
             reason: value.reason.unwrap_or_default(),
             metadata: meta,
             namespace,
@@ -109,6 +113,7 @@ impl From<Event> for SentryEvent {
             name: value.involved_object.name.unwrap_or_default(),
             message: value.message,
             creation_timestamp,
+            node_labels: Default::default(),
         }
     }
 }
@@ -152,11 +157,22 @@ impl From<&SentryEvent> for v7::Event<'_> {
         v7_event.event_id = value.uid;
         v7_event.message = value.message.clone();
         v7_event.culprit = Some(format!("{} {}", value.obj_name(), value.reason));
-        v7_event.server_name = Some(value.source_host.clone().into());
+        v7_event.server_name = value.source_host.clone().map(|s| s.into());
         v7_event.sdk = Some(Cow::Borrowed(SDK_VALUE.deref()));
         if let Some(timestamp) = value.creation_timestamp {
             v7_event.timestamp = timestamp;
         }
+
+        let mut extra = value.metadata_map();
+        let labels = Map::from_iter(
+            value
+                .node_labels
+                .clone()
+                .into_iter()
+                .map(|(key, value)| (key, value.into())),
+        );
+        extra.insert("node labels".to_string(), Value::Object(labels));
+
         v7_event.extra = value.metadata_map();
         v7_event.fingerprint = fingerprint.into();
         v7_event.level = value.level;
