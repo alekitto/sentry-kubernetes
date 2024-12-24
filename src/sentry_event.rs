@@ -18,7 +18,7 @@ lazy_static! {
     static ref SDK_VALUE: Cow<'static, ClientSdkInfo> = {
         let info = ClientSdkInfo {
             name: "sentry-kubernetes".to_string(),
-            version: "1.0.0".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
             integrations: vec![],
             packages: vec![],
         };
@@ -218,7 +218,6 @@ mod tests {
             message: Some("Error: ImagePullBackOff".to_string()),
             metadata: ObjectMeta {
                 annotations: None,
-                cluster_name: None,
                 creation_timestamp: Some(Time(
                     DateTime::parse_from_rfc3339("2023-04-08T22:27:40Z")
                         .unwrap()

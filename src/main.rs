@@ -1,146 +1,150 @@
-use crate::processor::Processor;
+use crate::caching_client::CachingClient;
+use crate::config::{ConfigWatcher, SentryConfig};
+use crate::notifier::{Notifier, NotifierSubsystem};
+use ::config::{Config, Environment, File};
 use anyhow::Result;
+use clap::Parser;
 use futures::prelude::*;
-use getopts::Options;
 use k8s_openapi::api::core::v1::Event;
 use kube::runtime::{watcher, WatchStreamExt};
 use kube::{Api, Client};
-use lazy_static::lazy_static;
-use log::{debug, error, info, LevelFilter};
+use log::{debug, warn, LevelFilter};
 use sentry::types::Dsn;
 use simple_logger::SimpleLogger;
-use std::env;
+use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::sleep;
+use tokio::select;
+use tokio_graceful_shutdown::{SubsystemBuilder, Toplevel};
 
-mod processor;
+mod caching_client;
+mod config;
+mod k8s;
+mod notifier;
+mod selector;
 mod sentry_event;
 
-lazy_static! {
-    static ref SENTRY_DSN: String = env::var("DSN").unwrap_or_default();
-    static ref ENV: String = env::var("ENVIRONMENT").unwrap_or_default();
-    static ref RELEASE: String = env::var("RELEASE").unwrap_or_default();
+/// Monitor kubernetes resources and send errors to Sentry.
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Configuration file path
+    #[arg(short, long, default_value = "config.toml")]
+    config: String,
+
+    /// Set output log level
+    #[arg(short, long, default_value = "ERROR")]
+    log_level: String,
 }
 
-fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [options]", program);
-    print!("{}", opts.usage(&brief));
+pub struct GlobalConfiguration {
+    pub dsn: Option<Dsn>,
+    pub environment: Option<String>,
+    pub release: Option<String>,
+    pub levels: Vec<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
-    let program = args[0].clone();
+    let args = Args::parse();
 
-    let mut opts = Options::new();
-    opts.optopt("l", "log-level", "set output file name", "ERROR");
-    opts.optflag("h", "help", "print this help menu");
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(f) => {
-            panic!("{}", f.to_string())
-        }
-    };
+    let log_level = LevelFilter::from_str(&args.log_level).unwrap_or(LevelFilter::Error);
+    SimpleLogger::new().with_level(log_level).init()?;
 
-    if matches.opt_present("h") {
-        print_usage(&program, opts);
-        return Ok(());
-    }
+    let config: SentryConfig = Config::builder()
+        .add_source(Environment::default().try_parsing(true).list_separator(","))
+        .add_source(File::from(PathBuf::from(args.config)))
+        .build()?
+        .try_deserialize()?;
 
-    let log_level = env::var("LOG_LEVEL").unwrap_or("INFO".to_string());
-    let log_level = matches.opt_get_default("l", log_level).unwrap();
-    let log_level = LevelFilter::from_str(&log_level).unwrap_or(LevelFilter::Error);
-    SimpleLogger::new().with_level(log_level).init().unwrap();
-
-    let client = Client::try_default().await?;
-    loop {
-        if let Err(e) = watch_loop(client.clone()).await {
-            error!("{}", e.to_string());
-            sleep(Duration::from_secs(5)).await;
-        }
-    }
-}
-
-fn list_env(name: &str, default: Option<String>) -> Vec<String> {
-    env::var(name)
-        .unwrap_or(default.unwrap_or_default())
-        .split(',')
-        .map(|c| c.trim().to_string())
-        .filter(|c| !c.is_empty())
-        .collect::<Vec<_>>()
-}
-
-async fn watch_loop(client: Client) -> Result<()> {
-    info!("Initializing Sentry client");
-    let dsn = Dsn::from_str(&SENTRY_DSN)?;
-    let _sentry = sentry::init(sentry::ClientOptions {
-        dsn: Some(dsn),
-        environment: if ENV.is_empty() {
+    let global_dsn = config.dsn.and_then(|dsn| match Dsn::from_str(&dsn) {
+        Ok(t) => Some(t),
+        Err(e) => {
+            warn!(r#"Global DSN is invalid ({}), ignoring"#, e.to_string());
             None
-        } else {
-            Some(ENV.clone().into())
-        },
-        release: if RELEASE.is_empty() {
-            None
-        } else {
-            Some(RELEASE.clone().into())
-        },
-        ..Default::default()
+        }
     });
 
-    info!("Staring kubernetes watcher");
+    let global_config = GlobalConfiguration {
+        dsn: global_dsn,
+        release: config.release,
+        environment: config.environment,
+        levels: if config.levels.is_empty() {
+            vec!["ERROR".to_string(), "WARNING".to_string()]
+        } else {
+            config.levels
+        },
+    };
 
-    let event_namespaces = list_env("EVENT_NAMESPACES", None);
-    let exclude_components = list_env("COMPONENT_FILTER", None);
-    let exclude_reasons = list_env("REASON_FILTER", None);
-    let exclude_namespaces = list_env("EVENT_NAMESPACES_EXCLUDED", None);
-    let event_levels = list_env("EVENT_LEVELS", Some("warning,error".to_string()));
+    let watchers_config = if config.watchers.is_empty() {
+        vec![ConfigWatcher::all()]
+    } else {
+        config.watchers
+    };
 
-    info!("Only reporting events of levels: {:?}", &event_levels);
-    let processor: Processor<_> = Processor::builder(client.clone(), |sentry_event| {
-        let uuid = sentry::capture_event(sentry::protocol::Event::from(sentry_event));
-        debug!(target: "sentry_kubernetes::sentry_client", "Captured event (uuid = {})", uuid);
-    })
-    .event_namespaces(event_namespaces, exclude_namespaces)
-    .event_components(exclude_components)
-    .event_reasons(exclude_reasons)
-    .event_levels(event_levels)
-    .into();
+    let (sender, _) = tokio::sync::broadcast::channel(512);
 
-    let api = Api::<Event>::all(client);
-    watcher(api, Default::default())
-        .applied_objects()
-        .try_for_each(|event| async {
-            debug!(target: "sentry_kubernetes::kubernetes_event_watcher", "Processing event: {:#?}", event);
-            processor.process(event).await;
-
-            Ok(())
-        })
-        .await?;
-
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::list_env;
-
-    #[test]
-    pub fn test_list_env() {
-        let def_list = list_env(
-            "THIS_SHOULD_NOT_BE_DEFINED",
-            Some("warning,error".to_string()),
-        );
-        assert_eq!(def_list, vec!["warning".to_string(), "error".to_string()]);
-
-        let def_list = list_env(
-            "THIS_SHOULD_NOT_BE_DEFINED",
-            Some("warning,,,x,,error".to_string()),
-        );
-        assert_eq!(
-            def_list,
-            vec!["warning".to_string(), "x".to_string(), "error".to_string()]
-        );
+    let mut notifiers = vec![];
+    let client = Arc::new(CachingClient::new(Client::try_default().await?));
+    for watcher in watchers_config.into_iter() {
+        notifiers.push(Notifier::new(
+            watcher,
+            &global_config,
+            client.clone(),
+            |hub, sentry_event| {
+                let uuid = hub.capture_event(sentry::protocol::Event::from(sentry_event));
+                debug!(target: "sentry_kubernetes::sentry_client", "Captured event (uuid = {})", uuid);
+            }
+        ))
     }
+
+    let mut stream = watcher(
+        Api::<Event>::all(Client::try_default().await?),
+        Default::default(),
+    )
+    .default_backoff()
+    .applied_objects()
+    .boxed();
+
+    Toplevel::<anyhow::Error>::new(|s| async move {
+        for (i, notifier) in notifiers.into_iter().enumerate() {
+            let notifier_subsys = NotifierSubsystem::new(notifier, sender.subscribe());
+            s.start(SubsystemBuilder::new(format!("notifier_{}", i), |a| {
+                notifier_subsys.run(a)
+            }));
+        }
+
+        loop {
+            select! {
+                v = stream.try_next() => {
+                    match v {
+                        Ok(Some(o)) => {
+                            let metadata = o.metadata.clone();
+                            debug!(
+                                "changes detected for object {}/{}",
+                                metadata.namespace.unwrap_or_default(),
+                                metadata.name.unwrap_or_default()
+                            );
+
+                            sender.send(o).unwrap();
+                        },
+                        Ok(None) => continue,
+                        Err(_) => {
+                            s.request_shutdown();
+                            break;
+                        }
+                    }
+                },
+                _ = s.on_shutdown_requested() => break,
+                else => continue,
+            }
+        }
+
+        s.wait_for_children().await;
+    })
+    .catch_signals()
+    .handle_shutdown_requests(Duration::from_secs(60))
+    .await
+    .map_err(Into::into)
 }
