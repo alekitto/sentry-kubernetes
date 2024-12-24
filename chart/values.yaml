@@ -19,7 +19,7 @@ sentry:
 # existingSecret:
 image:
   repository: ghcr.io/alekitto/sentry-kubernetes
-  tag: latest
+  tag: ~
   pullPolicy: Always
 
 resources: {}

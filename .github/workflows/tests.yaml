@@ -16,7 +16,7 @@ jobs:
         name: Tests
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@master
+            - uses: actions/checkout@v4
               with:
                   fetch-depth: 1
 
