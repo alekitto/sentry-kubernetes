@@ -186,8 +186,9 @@ mod tests {
     use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
     use k8s_openapi::chrono::DateTime;
-    use kube::Client;
+    use kube::{Client, Config};
     use std::sync::atomic::{AtomicBool, Ordering};
+    use k8s_openapi::http::Uri;
 
     fn generate_event() -> Event {
         Event {
@@ -253,7 +254,7 @@ mod tests {
     pub async fn test_processor_should_send_event() {
         let event = generate_event();
         let passed = AtomicBool::new(false);
-        let client = Client::try_default().await.unwrap();
+        let client = Client::try_from(Config::new(Uri::try_from("https://localhost:6443/").unwrap())).unwrap();
         let processor = Processor::new(
             vec![],
             vec![],

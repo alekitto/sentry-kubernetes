@@ -3,7 +3,7 @@ name: sentry-kubernetes
 description: A Helm chart for sentry-kubernetes (https://github.com/alekitto/sentry-kubernetes)
 type: application
 version: 1.0.0
-appVersion: v1.0.0
+appVersion: 1.0.0
 home: https://github.com/alekitto/sentry-kubernetes
 icon: https://sentry-brand.storage.googleapis.com/sentry-glyph-white.png
 keywords:
