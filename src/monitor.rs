@@ -1,5 +1,5 @@
 use crate::caching_client::CachingClient;
-use crate::config::ConfigWatcher;
+use crate::config::ConfigMonitor;
 use crate::sentry_event::SentryEvent;
 use crate::GlobalConfiguration;
 use anyhow::Result;
@@ -19,13 +19,13 @@ use tokio_graceful_shutdown::SubsystemHandle;
 static CLIENTS: LazyLock<Mutex<HashMap<Option<Dsn>, Arc<Hub>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-pub struct NotifierSubsystem<F: Fn(&Hub, &SentryEvent)> {
-    notifier: Notifier<F>,
+pub struct MonitorSubsystem<F: Fn(&Hub, &SentryEvent)> {
+    notifier: Monitor<F>,
     receiver: Receiver<Event>,
 }
 
-impl<F: Fn(&Hub, &SentryEvent)> NotifierSubsystem<F> {
-    pub fn new(notifier: Notifier<F>, receiver: Receiver<Event>) -> Self {
+impl<F: Fn(&Hub, &SentryEvent)> MonitorSubsystem<F> {
+    pub fn new(notifier: Monitor<F>, receiver: Receiver<Event>) -> Self {
         Self { notifier, receiver }
     }
 
@@ -47,17 +47,17 @@ impl<F: Fn(&Hub, &SentryEvent)> NotifierSubsystem<F> {
     }
 }
 
-pub struct Notifier<F: Fn(&Hub, &SentryEvent)> {
+pub struct Monitor<F: Fn(&Hub, &SentryEvent)> {
     client: Arc<CachingClient>,
-    configuration: ConfigWatcher,
+    configuration: ConfigMonitor,
     event_levels: Vec<Level>,
     sentry_hub: Arc<Hub>,
     sender: F,
 }
 
-impl<F: Fn(&Hub, &SentryEvent)> Notifier<F> {
+impl<F: Fn(&Hub, &SentryEvent)> Monitor<F> {
     pub fn new(
-        configuration: ConfigWatcher,
+        configuration: ConfigMonitor,
         global_configuration: &GlobalConfiguration,
         client: Arc<CachingClient>,
         sender: F,
@@ -183,8 +183,8 @@ impl<F: Fn(&Hub, &SentryEvent)> Notifier<F> {
 #[cfg(test)]
 mod tests {
     use crate::caching_client::CachingClient;
-    use crate::config::{ConfigResource, ConfigWatcher};
-    use crate::notifier::Notifier;
+    use crate::config::{ConfigResource, ConfigMonitor};
+    use crate::monitor::Monitor;
     use crate::GlobalConfiguration;
     use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
@@ -258,8 +258,8 @@ mod tests {
         let passed = AtomicBool::new(false);
         let client = Client::try_default().await.unwrap();
 
-        let processor = Notifier::new(
-            ConfigWatcher {
+        let processor = Monitor::new(
+            ConfigMonitor {
                 resources: vec![ConfigResource {
                     api_version: None,
                     kind: Some("Pod".to_string()),

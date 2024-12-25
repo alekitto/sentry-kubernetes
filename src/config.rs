@@ -52,7 +52,7 @@ impl ConfigResource {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct ConfigWatcher {
+pub struct ConfigMonitor {
     pub resources: Vec<ConfigResource>,
     pub dsn: Option<String>,
     pub environment: Option<String>,
@@ -60,7 +60,7 @@ pub struct ConfigWatcher {
     pub levels: Vec<String>,
 }
 
-impl ConfigWatcher {
+impl ConfigMonitor {
     pub fn all() -> Self {
         Self {
             resources: vec![ConfigResource::default()],
@@ -69,7 +69,7 @@ impl ConfigWatcher {
     }
 }
 
-impl Default for ConfigWatcher {
+impl Default for ConfigMonitor {
     fn default() -> Self {
         Self {
             resources: vec![],
@@ -87,5 +87,5 @@ pub struct SentryConfig {
     pub environment: Option<String>,
     pub release: Option<String>,
     pub levels: Vec<String>,
-    pub watchers: Vec<ConfigWatcher>,
+    pub monitors: Vec<ConfigMonitor>,
 }

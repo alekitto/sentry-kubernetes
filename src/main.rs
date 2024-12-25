@@ -1,6 +1,6 @@
 use crate::caching_client::CachingClient;
-use crate::config::{ConfigWatcher, SentryConfig};
-use crate::notifier::{Notifier, NotifierSubsystem};
+use crate::config::{ConfigMonitor, SentryConfig};
+use crate::monitor::{Monitor, MonitorSubsystem};
 use ::config::{Config, Environment, File};
 use anyhow::Result;
 use clap::Parser;
@@ -21,7 +21,7 @@ use tokio_graceful_shutdown::{SubsystemBuilder, Toplevel};
 mod caching_client;
 mod config;
 mod k8s;
-mod notifier;
+mod monitor;
 mod selector;
 mod sentry_event;
 
@@ -77,19 +77,19 @@ async fn main() -> Result<()> {
         },
     };
 
-    let watchers_config = if config.watchers.is_empty() {
-        vec![ConfigWatcher::all()]
+    let monitors_config = if config.monitors.is_empty() {
+        vec![ConfigMonitor::all()]
     } else {
-        config.watchers
+        config.monitors
     };
 
     let (sender, _) = tokio::sync::broadcast::channel(512);
 
-    let mut notifiers = vec![];
+    let mut monitors = vec![];
     let client = Arc::new(CachingClient::new(Client::try_default().await?));
-    for watcher in watchers_config.into_iter() {
-        notifiers.push(Notifier::new(
-            watcher,
+    for monitor_config in monitors_config.into_iter() {
+        monitors.push(Monitor::new(
+            monitor_config,
             &global_config,
             client.clone(),
             |hub, sentry_event| {
@@ -108,8 +108,8 @@ async fn main() -> Result<()> {
     .boxed();
 
     Toplevel::<anyhow::Error>::new(|s| async move {
-        for (i, notifier) in notifiers.into_iter().enumerate() {
-            let notifier_subsys = NotifierSubsystem::new(notifier, sender.subscribe());
+        for (i, notifier) in monitors.into_iter().enumerate() {
+            let notifier_subsys = MonitorSubsystem::new(notifier, sender.subscribe());
             s.start(SubsystemBuilder::new(format!("notifier_{}", i), |a| {
                 notifier_subsys.run(a)
             }));
