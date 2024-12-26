@@ -30,6 +30,7 @@ impl TryFrom<&str> for Selectors {
 }
 
 impl Selectors {
+    #[allow(unused)]
     pub fn len(&self) -> usize {
         self.0.len()
     }

@@ -17,7 +17,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
-use tokio::time::sleep;
 use tokio_graceful_shutdown::{SubsystemBuilder, Toplevel};
 
 mod caching_client;
@@ -122,17 +121,7 @@ async fn main() -> Result<()> {
     .applied_objects()
     .boxed();
 
-    if !config.historical {
-        loop {
-            select! {
-                biased;
-                v = stream.try_next() => {},
-                _ = sleep(Duration::from_secs(5)) => break,
-            }
-        }
-    }
-
-    Toplevel::<anyhow::Error>::new(|s| async move {
+    Toplevel::<anyhow::Error>::new(move |s| async move {
         for (i, notifier) in monitors.into_iter().enumerate() {
             let notifier_subsys = MonitorSubsystem::new(notifier, sender.subscribe());
             s.start(SubsystemBuilder::new(format!("notifier_{}", i), |a| {
@@ -140,19 +129,28 @@ async fn main() -> Result<()> {
             }));
         }
 
+        let mut historical = config.historical;
         loop {
             select! {
                 v = stream.try_next() => {
                     match v {
-                        Ok(Some(o)) => {
-                            let metadata = o.metadata.clone();
+                        Ok(Some(e)) => {
+                            if !historical {
+                                let Some(ref t) = e.event_time else { continue };
+                                if t.0 < now {
+                                    continue;
+                                }
+                            }
+
+                            historical = true;
+                            let metadata = e.metadata.clone();
                             debug!(
                                 "changes detected for object {}/{}",
                                 metadata.namespace.unwrap_or_default(),
                                 metadata.name.unwrap_or_default()
                             );
 
-                            sender.send(o).unwrap();
+                            sender.send(e).unwrap();
                         },
                         Ok(None) => continue,
                         Err(_) => {
