@@ -3,17 +3,23 @@
 sentry:
   dsn: ~
   existingSecret: ~
+  levels: [ 'warning', 'error' ]
   logLevel: ~
   environment: ~
   release: ~
+  historical: false
 
-  # Sets event filters. If a filter is empty, the filter itself is ignored.
-  filters:
-    namespaces: [] # Only report events from these namespaces
-    excludeNamespaces: [] # Do not report events from these namespaces
-    excludeComponents: [] # Do not report events from these components
-    excludeReasons: [] # Do not report events with these reasons
-    eventLevels: [ 'warning', 'error' ] # Only report events of these levels. "error" events are always reported.
+  # Sets resources to be monitored. By default, monitor all resources in all namespaces
+  # monitors:
+  #   - dsn: 'https://other@sentry.com/'
+  #     environment: 'prod'
+  #     release: '4-TEST'
+  #     levels: [ 'info', 'error' ]
+  #     resources:
+  #       - api_version: 'batch/v1'
+  #         kind: CronJob
+  #         label_selector: 'app=nginx'
+  #         namespace: 'default'
 
 # Sentry DSN config using an existing secret:
 # existingSecret:

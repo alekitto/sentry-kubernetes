@@ -5,9 +5,13 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Default)]
 pub struct ConfigResource {
+    #[serde(default)]
     pub api_version: Option<String>,
+    #[serde(default)]
     pub kind: Option<String>,
+    #[serde(default)]
     pub label_selector: Option<Selectors>,
+    #[serde(default)]
     pub namespace: Option<String>,
 }
 
@@ -53,10 +57,15 @@ impl ConfigResource {
 
 #[derive(Deserialize, Debug)]
 pub struct ConfigMonitor {
+    #[serde(default)]
     pub resources: Vec<ConfigResource>,
+    #[serde(default)]
     pub dsn: Option<String>,
+    #[serde(default)]
     pub environment: Option<String>,
+    #[serde(default)]
     pub release: Option<String>,
+    #[serde(default)]
     pub levels: Vec<String>,
 }
 
@@ -81,11 +90,20 @@ impl Default for ConfigMonitor {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Default)]
 pub struct SentryConfig {
+    #[serde(default)]
     pub dsn: Option<String>,
+    #[serde(default)]
     pub environment: Option<String>,
+    #[serde(default)]
     pub release: Option<String>,
+    #[serde(default)]
     pub levels: Vec<String>,
+    #[serde(default)]
     pub monitors: Vec<ConfigMonitor>,
+    #[serde(default)]
+    pub log_level: Option<String>,
+    #[serde(default)]
+    pub historical: bool,
 }

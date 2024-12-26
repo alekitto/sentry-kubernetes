@@ -183,7 +183,7 @@ impl<F: Fn(&Hub, &SentryEvent)> Monitor<F> {
 #[cfg(test)]
 mod tests {
     use crate::caching_client::CachingClient;
-    use crate::config::{ConfigResource, ConfigMonitor};
+    use crate::config::{ConfigMonitor, ConfigResource};
     use crate::monitor::Monitor;
     use crate::GlobalConfiguration;
     use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};

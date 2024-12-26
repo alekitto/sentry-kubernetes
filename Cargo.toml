@@ -1,6 +1,6 @@
 [package]
 name = "sentry-kubernetes"
-version = "2.0.0"
+version = "2.0.0-beta.1"
 edition = "2021"
 
 [dependencies]
@@ -32,6 +32,7 @@ features = [
     "debug-images",
     "debug-logs",
     "log",
-    "transport",
     "panic",
+    "reqwest",
+    "rustls",
 ]

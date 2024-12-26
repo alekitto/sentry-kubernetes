@@ -1,0 +1,9 @@
+{{- $config := omit .Values.sentry "dsn" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels: {{ include "sentry-kubernetes.labels" . | indent 4 }}
+  name: {{ template "sentry-kubernetes.fullname" . }}
+data:
+  config.yaml: |-
+    {{- $config | toYaml | nindent 4 }}

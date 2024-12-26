@@ -28,47 +28,22 @@ spec:
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+        command:
+          - -c
+          - /app/config.yaml
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
-          - name: DSN
+          - name: SENTRY_DSN
             valueFrom:
               secretKeyRef:
                 name: {{ template "sentry-kubernetes.secretName" . }}
                 key: sentry.dsn
-          {{- if .Values.sentry.environment }}
-          - name: ENVIRONMENT
-            value: {{ .Values.sentry.environment }}
-          {{- end }}
-          {{- if .Values.sentry.release }}
-          - name: RELEASE
-            value: {{ .Values.sentry.release }}
-          {{- end }}
-          {{- if .Values.sentry.logLevel }}
-          - name: LOG_LEVEL
-            value: {{ .Values.sentry.logLevel }}
-          {{- end }}
-          {{- if .Values.sentry.filters.namespaces }}
-          - name: EVENT_NAMESPACES
-            value: {{ join "," .Values.sentry.filters.namespaces | quote }}
-          {{- end }}
-          {{- if .Values.sentry.filters.excludeNamespaces }}
-          - name: EVENT_NAMESPACES_EXCLUDED
-            value: {{ join "," .Values.sentry.filters.excludeNamespaces | quote }}
-          {{- end }}
-          {{- if .Values.sentry.filters.excludeComponents }}
-          - name: COMPONENT_FILTER
-            value: {{ join "," .Values.sentry.filters.excludeComponents | quote }}
-          {{- end }}
-          {{- if .Values.sentry.filters.excludeReasons }}
-          - name: REASON_FILTER
-            value: {{ join "," .Values.sentry.filters.excludeReasons | quote }}
-          {{- end }}
-          {{- if .Values.sentry.filters.eventLevels }}
-          - name: EVENT_LEVELS
-            value: {{ join "," .Values.sentry.filters.eventLevels | quote }}
-          {{- end }}
         resources:
 {{ toYaml .Values.resources | indent 10 }}
+        volumeMounts:
+          - mountPath: /app/config.yaml
+            name: app-config
+            subPath: config.yaml
     {{- if .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml .Values.nodeSelector | indent 8 }}
@@ -78,3 +53,7 @@ spec:
 {{ toYaml .Values.tolerations | indent 8 }}
     {{- end }}
       serviceAccountName: {{ template "sentry-kubernetes.serviceAccountName" . }}
+      volumes:
+        - name: app-config
+          configMap:
+            name: {{ template "sentry-kubernetes.fullname" . }}

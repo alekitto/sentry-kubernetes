@@ -6,6 +6,7 @@ use anyhow::Result;
 use clap::Parser;
 use futures::prelude::*;
 use k8s_openapi::api::core::v1::Event;
+use k8s_openapi::chrono;
 use kube::runtime::{watcher, WatchStreamExt};
 use kube::{Api, Client};
 use log::{debug, warn, LevelFilter};
@@ -16,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
+use tokio::time::sleep;
 use tokio_graceful_shutdown::{SubsystemBuilder, Toplevel};
 
 mod caching_client;
@@ -48,15 +50,24 @@ pub struct GlobalConfiguration {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-
     let log_level = LevelFilter::from_str(&args.log_level).unwrap_or(LevelFilter::Error);
     SimpleLogger::new().with_level(log_level).init()?;
 
     let config: SentryConfig = Config::builder()
-        .add_source(Environment::default().try_parsing(true).list_separator(","))
+        .add_source(
+            Environment::with_prefix("SENTRY")
+                .try_parsing(true)
+                .list_separator(","),
+        )
         .add_source(File::from(PathBuf::from(args.config)))
+        .set_default("log_level", Some(args.log_level))?
+        .set_default("historical", true)?
         .build()?
         .try_deserialize()?;
+
+    let log_level = &config.log_level.unwrap_or_else(|| "ERROR".to_string());
+    let log_level = LevelFilter::from_str(log_level).unwrap_or(LevelFilter::Error);
+    log::set_max_level(log_level);
 
     let global_dsn = config.dsn.and_then(|dsn| match Dsn::from_str(&dsn) {
         Ok(t) => Some(t),
@@ -66,21 +77,23 @@ async fn main() -> Result<()> {
         }
     });
 
+    let global_levels = config.levels;
     let global_config = GlobalConfiguration {
         dsn: global_dsn,
         release: config.release,
         environment: config.environment,
-        levels: if config.levels.is_empty() {
+        levels: if global_levels.is_empty() {
             vec!["ERROR".to_string(), "WARNING".to_string()]
         } else {
-            config.levels
+            global_levels
         },
     };
 
-    let monitors_config = if config.monitors.is_empty() {
+    let monitors_config = config.monitors;
+    let monitors_config = if monitors_config.is_empty() {
         vec![ConfigMonitor::all()]
     } else {
-        config.monitors
+        monitors_config
     };
 
     let (sender, _) = tokio::sync::broadcast::channel(512);
@@ -99,6 +112,8 @@ async fn main() -> Result<()> {
         ))
     }
 
+    let now = chrono::Utc::now();
+
     let mut stream = watcher(
         Api::<Event>::all(Client::try_default().await?),
         Default::default(),
@@ -106,6 +121,16 @@ async fn main() -> Result<()> {
     .default_backoff()
     .applied_objects()
     .boxed();
+
+    if !config.historical {
+        loop {
+            select! {
+                biased;
+                v = stream.try_next() => {},
+                _ = sleep(Duration::from_secs(5)) => break,
+            }
+        }
+    }
 
     Toplevel::<anyhow::Error>::new(|s| async move {
         for (i, notifier) in monitors.into_iter().enumerate() {
