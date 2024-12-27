@@ -1,35 +1,80 @@
-sentry-kubernetes
-=================
+# sentry-kubernetes
 
-Sentry Kubernetes monitor in Rust. The original (pyhton) project can be found here: https://github.com/getsentry/sentry-kubernetes/
+![GitHub license](https://img.shields.io/github/license/alekitto/sentry-kubernetes)
+![GitHub stars](https://img.shields.io/github/stars/alekitto/sentry-kubernetes)
+![GitHub forks](https://img.shields.io/github/forks/alekitto/sentry-kubernetes)
 
-Errors and warnings in Kubernetes often go unnoticed by operators. Even when they are checked they are hard to read 
-and understand in the context of what else is going on in the cluster. `sentry-kubernetes` is a small container you 
-launch inside your Kubernetes cluster that will send errors and warnings to Sentry where they will be cleanly presented
-and intelligently grouped. Typical Sentry features such as notifications can then be used to help operation and 
-developer visibility.
+`sentry-kubernetes` is an open-source tool designed to monitor a Kubernetes cluster and send notifications to [Sentry](https://sentry.io/) (SaaS or self-hosted) when errors are detected. This tool helps track critical events, improving incident management and operational visibility.
 
-Create a new project on [Sentry](http://sentry.io/) (or your self-hosted instance) and use your DSN when
-launching the `sentry-kubernetes` container:
+## Features
+- **Real-time monitoring** of Kubernetes events.
+- Integration with **Sentry** for error notifications.
+- Support for both SaaS and self-hosted Sentry environments.
+- Simple and flexible configuration.
 
-    kubectl run sentry-kubernetes \
-      --image ghcr.io/alekitto/sentry-kubernetes \
-      --env="DSN=$YOUR_DSN"
+## Requirements
+- Kubernetes cluster (version >= 1.26)
+- A configured project on [Sentry](https://sentry.io/) (SaaS or self-hosted).
 
-#### Filters and options
+## Installation
 
-| ENV var                   | Description                                                                                                                                    |
-|---------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| EVENT_NAMESPACES          | A comma-separated list of namespaces to be included. If set, only the events from these namespace will be sent to Sentry.                      |
-| EVENT_NAMESPACES_EXCLUDED | A comma-separated list of namespaces. Events from these namespaces won't be sent to Sentry.                                                    |
-| COMPONENT_FILTER          | A comma-separated list of component names. Events from these components (ex: kubelet) won't be sent to Sentry.                                 |
-| REASON_FILTER             | A comma-separated list of reasons (error codes). Events which have these reasons (ex: FailedMount) won't be sent to Sentry.                    |
-| EVENT_LEVELS              | A comma-separated list of event levels (default: "warning,error"). Only events of these levels will be sent to Sentry. Errors are always sent. |
+You can install `sentry-kubernetes` using Helm:
 
-## Install using helm charts
-
-```console
-$ helm install oci://ghcr.io/alekitto/sentry-kubernetes-chart/sentry-kubernetes release-name --set sentry.dsn=<your-dsn>
+```bash
+helm install sentry-kubernetes oci://ghcr.io/alekitto/sentry-kubernetes-chart/sentry-kubernetes
 ```
 
-See [charts README](./chart/README.md) for more information.
+Ensure you configure the OCI repository before installation.
+
+## Configuration
+
+`sentry-kubernetes` is configured using a YAML file. Below is an example configuration structure:
+
+```yaml
+dsn: <string> # Global Sentry DSN
+levels: # Severity levels to monitor
+  - trace
+  - debug
+  - info
+  - warning
+  - error
+logLevel: <string> # Application log level (e.g., "info")
+environment: <string> # Environment name (e.g., "production")
+release: <string> # Application release/version
+historical: <bool> # Send historical events (true or false)
+monitors: # Monitor configuration
+  - dsn: <string> # Specific DSN for the monitor (optional, uses global DSN if absent)
+    environment: <string> # Specific environment (optional, uses global environment if absent)
+    release: <string> # Specific release (optional, uses global release if absent)
+    levels: # Specific levels for the monitor
+      - warning
+      - error
+    resources: # List of resources to monitor (monitor all the resources if absent)
+      - api_version: <string> # API version of the resource (e.g., "v1")
+        kind: <string> # Resource type (e.g., "Pod", "Deployment")
+        label_selector: <string> # Label selector (e.g., "app=my-app")
+        namespace: <string> # Resource namespace
+```
+
+### Usage Example
+
+```bash
+helm install sentry-kubernetes oci://ghcr.io/alekitto/sentry-kubernetes-chart/sentry-kubernetes -f values.yaml
+```
+
+## Contributing
+
+Contributions are welcome! Feel free to open issues or pull requests on [GitHub](https://github.com/alekitto/sentry-kubernetes).
+
+1. Fork the repository.
+2. Create a branch for your changes: `git checkout -b feature/my-feature`.
+3. Make your changes.
+4. Open a pull request.
+
+## License
+
+This project is licensed under the [MIT](LICENSE).
+
+## Contact
+
+If you have questions or feedback, feel free to open an issue or contact me directly on [GitHub](https://github.com/alekitto).
