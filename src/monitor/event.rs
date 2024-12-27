@@ -1,53 +1,17 @@
 use crate::caching_client::CachingClient;
 use crate::config::ConfigMonitor;
+use crate::monitor::CLIENTS;
 use crate::sentry_event::SentryEvent;
 use crate::GlobalConfiguration;
-use anyhow::Result;
-use futures::FutureExt;
 use k8s_openapi::api::core::v1::Event;
-use log::{debug, info};
+use log::debug;
 use sentry::types::Dsn;
 use sentry::{Breadcrumb, Client, Hub, Level};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::str::FromStr;
-use std::sync::{Arc, LazyLock, Mutex};
-use std::time::Duration;
-use tokio::sync::broadcast::Receiver;
-use tokio::time::sleep;
-use tokio_graceful_shutdown::SubsystemHandle;
+use std::sync::Arc;
 
-static CLIENTS: LazyLock<Mutex<HashMap<Option<Dsn>, Arc<Hub>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-pub struct MonitorSubsystem<F: Fn(&Hub, &SentryEvent)> {
-    notifier: Monitor<F>,
-    receiver: Receiver<Event>,
-}
-
-impl<F: Fn(&Hub, &SentryEvent)> MonitorSubsystem<F> {
-    pub fn new(notifier: Monitor<F>, receiver: Receiver<Event>) -> Self {
-        Self { notifier, receiver }
-    }
-
-    pub async fn run(mut self, subsys: SubsystemHandle<anyhow::Error>) -> Result<()> {
-        loop {
-            if let Some(Ok(o)) = self.receiver.recv().now_or_never() {
-                self.notifier.process(o).await;
-            }
-
-            if subsys.is_shutdown_requested() {
-                break;
-            } else {
-                sleep(Duration::from_secs(1)).await;
-            }
-        }
-
-        info!("Shutdown requested, terminating...");
-        Ok(())
-    }
-}
-
-pub struct Monitor<F: Fn(&Hub, &SentryEvent)> {
+pub struct EventMonitor<F: Fn(&Hub, &SentryEvent)> {
     client: Arc<CachingClient>,
     configuration: ConfigMonitor,
     event_levels: Vec<Level>,
@@ -55,7 +19,7 @@ pub struct Monitor<F: Fn(&Hub, &SentryEvent)> {
     sender: F,
 }
 
-impl<F: Fn(&Hub, &SentryEvent)> Monitor<F> {
+impl<F: Fn(&Hub, &SentryEvent)> EventMonitor<F> {
     pub fn new(
         configuration: ConfigMonitor,
         global_configuration: &GlobalConfiguration,
@@ -69,7 +33,6 @@ impl<F: Fn(&Hub, &SentryEvent)> Monitor<F> {
             .or_else(|| global_configuration.dsn.clone());
 
         let mut clients_map = CLIENTS.lock().unwrap();
-
         let sentry_hub = {
             if !clients_map.contains_key(&dsn) {
                 let sentry_client = Client::with_options(sentry::ClientOptions {
@@ -123,7 +86,7 @@ impl<F: Fn(&Hub, &SentryEvent)> Monitor<F> {
         }
     }
 
-    pub async fn process(&self, event: Event) {
+    pub(super) async fn process(&self, event: Event) {
         let mut matches = false;
         for c in &self.configuration.resources {
             matches = matches || c.event_matches(&event, &self.client).await;
@@ -184,7 +147,7 @@ impl<F: Fn(&Hub, &SentryEvent)> Monitor<F> {
 mod tests {
     use crate::caching_client::CachingClient;
     use crate::config::{ConfigMonitor, ConfigResource};
-    use crate::monitor::Monitor;
+    use crate::monitor::event::EventMonitor;
     use crate::GlobalConfiguration;
     use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
@@ -259,7 +222,7 @@ mod tests {
         let client =
             Client::try_from(Config::new("https://localhost:6443/".try_into().unwrap())).unwrap();
 
-        let processor = Monitor::new(
+        let processor = EventMonitor::new(
             ConfigMonitor {
                 resources: vec![ConfigResource {
                     api_version: None,

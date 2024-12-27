@@ -4,7 +4,7 @@ sentry:
   dsn: ~
   existingSecret: ~
   levels: [ 'warning', 'error' ]
-  logLevel: ~
+  log_level: ~
   environment: ~
   release: ~
   historical: false

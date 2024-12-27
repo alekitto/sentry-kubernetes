@@ -1,6 +1,5 @@
-use crate::caching_client::CachingClient;
 use crate::config::{ConfigMonitor, SentryConfig};
-use crate::monitor::{Monitor, MonitorSubsystem};
+use crate::monitor::{init_event_monitors, EventMonitorSubsystem};
 use ::config::{Config, Environment, File};
 use anyhow::Result;
 use clap::Parser;
@@ -14,7 +13,6 @@ use sentry::types::Dsn;
 use simple_logger::SimpleLogger;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
 use tokio_graceful_shutdown::{SubsystemBuilder, Toplevel};
@@ -48,6 +46,8 @@ pub struct GlobalConfiguration {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let now = chrono::Utc::now();
+
     let args = Args::parse();
     let log_level = LevelFilter::from_str(&args.log_level).unwrap_or(LevelFilter::Error);
     SimpleLogger::new().with_level(log_level).init()?;
@@ -65,8 +65,16 @@ async fn main() -> Result<()> {
         .build()?
         .try_deserialize()?;
 
-    let log_level = &config.log_level.unwrap_or_else(|| "ERROR".to_string());
-    let log_level = LevelFilter::from_str(log_level).unwrap_or(LevelFilter::Error);
+    let log_level = config
+        .log_level
+        .and_then(|l| match LevelFilter::from_str(&l) {
+            Ok(l) => Some(l),
+            Err(e) => {
+                warn!("Unable to parse log level: {}", e);
+                None
+            }
+        })
+        .unwrap_or_else(|| log_level);
     log::set_max_level(log_level);
 
     let global_dsn = config.dsn.and_then(|dsn| match Dsn::from_str(&dsn) {
@@ -97,22 +105,7 @@ async fn main() -> Result<()> {
     };
 
     let (sender, _) = tokio::sync::broadcast::channel(512);
-
-    let mut monitors = vec![];
-    let client = Arc::new(CachingClient::new(Client::try_default().await?));
-    for monitor_config in monitors_config.into_iter() {
-        monitors.push(Monitor::new(
-            monitor_config,
-            &global_config,
-            client.clone(),
-            |hub, sentry_event| {
-                let uuid = hub.capture_event(sentry::protocol::Event::from(sentry_event));
-                debug!(target: "sentry_kubernetes::sentry_client", "Captured event (uuid = {})", uuid);
-            }
-        ))
-    }
-
-    let now = chrono::Utc::now();
+    let monitors = init_event_monitors(&global_config, monitors_config).await?;
 
     let mut stream = watcher(
         Api::<Event>::all(Client::try_default().await?),
@@ -124,7 +117,7 @@ async fn main() -> Result<()> {
 
     Toplevel::<anyhow::Error>::new(move |s| async move {
         for (i, notifier) in monitors.into_iter().enumerate() {
-            let notifier_subsys = MonitorSubsystem::new(notifier, sender.subscribe());
+            let notifier_subsys = EventMonitorSubsystem::new(notifier, sender.subscribe());
             s.start(SubsystemBuilder::new(format!("notifier_{}", i), |a| {
                 notifier_subsys.run(a)
             }));
