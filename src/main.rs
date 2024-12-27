@@ -116,10 +116,10 @@ async fn main() -> Result<()> {
     .boxed();
 
     Toplevel::<anyhow::Error>::new(move |s| async move {
-        for (i, notifier) in monitors.into_iter().enumerate() {
-            let notifier_subsys = EventMonitorSubsystem::new(notifier, sender.subscribe());
-            s.start(SubsystemBuilder::new(format!("notifier_{}", i), |a| {
-                notifier_subsys.run(a)
+        for (i, monitor) in monitors.into_iter().enumerate() {
+            let monitor_subsystem = EventMonitorSubsystem::new(monitor, sender.subscribe());
+            s.start(SubsystemBuilder::new(format!("monitor_{}", i), |a| {
+                monitor_subsystem.run(a)
             }));
         }
 

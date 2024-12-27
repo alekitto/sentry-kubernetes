@@ -6,10 +6,11 @@ use crate::GlobalConfiguration;
 use k8s_openapi::api::core::v1::Event;
 use log::debug;
 use sentry::types::Dsn;
-use sentry::{Breadcrumb, Client, Hub, Level};
+use sentry::{Breadcrumb, Client, Hub, Integration, Level};
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use sentry::transports::DefaultTransportFactory;
 
 pub struct EventMonitor<F: Fn(&Hub, &SentryEvent)> {
     client: Arc<CachingClient>,
@@ -32,11 +33,22 @@ impl<F: Fn(&Hub, &SentryEvent)> EventMonitor<F> {
             .and_then(|s| Dsn::from_str(s).ok())
             .or_else(|| global_configuration.dsn.clone());
 
+
+        let integrations = {
+            // default integrations need to be ordered *before* custom integrations,
+            // since they also process events in order
+            let mut integrations: Vec<Arc<dyn Integration>> = vec![];
+            integrations.push(Arc::new(sentry::integrations::contexts::ContextIntegration::default()));
+            integrations
+        };
+
         let mut clients_map = CLIENTS.lock().unwrap();
         let sentry_hub = {
             if !clients_map.contains_key(&dsn) {
                 let sentry_client = Client::with_options(sentry::ClientOptions {
                     dsn: dsn.clone(),
+                    transport: Some(Arc::new(DefaultTransportFactory)),
+                    integrations,
                     environment: if let Some(env) = configuration
                         .environment
                         .as_deref()
