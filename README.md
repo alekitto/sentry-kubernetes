@@ -38,7 +38,7 @@ levels: # Severity levels to monitor
   - info
   - warning
   - error
-logLevel: <string> # Application log level (e.g., "info")
+log_level: <string> # Application log level (e.g., "info")
 environment: <string> # Environment name (e.g., "production")
 release: <string> # Application release/version
 historical: <bool> # Send historical events (true or false)

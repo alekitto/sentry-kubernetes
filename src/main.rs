@@ -56,7 +56,8 @@ async fn main() -> Result<()> {
         .add_source(
             Environment::with_prefix("SENTRY")
                 .try_parsing(true)
-                .list_separator(","),
+                .list_separator(",")
+                .with_list_parse_key("levels"),
         )
         .add_source(File::from(PathBuf::from(args.config)))
         .set_default("log_level", Some(args.log_level))?

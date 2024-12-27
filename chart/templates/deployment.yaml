@@ -28,7 +28,7 @@ spec:
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
-        command:
+        args:
           - -c
           - /app/config.yaml
         imagePullPolicy: {{ .Values.image.pullPolicy }}
