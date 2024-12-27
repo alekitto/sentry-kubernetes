@@ -49,8 +49,7 @@ async fn main() -> Result<()> {
     let now = chrono::Utc::now();
 
     let args = Args::parse();
-    let log_level = LevelFilter::from_str(&args.log_level).unwrap_or(LevelFilter::Error);
-    SimpleLogger::new().with_level(log_level).init()?;
+    let log_level = LevelFilter::from_str(&args.log_level).unwrap_or(LevelFilter::Warn);
 
     let config: SentryConfig = Config::builder()
         .add_source(
@@ -70,12 +69,13 @@ async fn main() -> Result<()> {
         .and_then(|l| match LevelFilter::from_str(&l) {
             Ok(l) => Some(l),
             Err(e) => {
-                warn!("Unable to parse log level: {}", e);
+                eprintln!("Unable to parse log level: {}", e);
                 None
             }
         })
         .unwrap_or_else(|| log_level);
-    log::set_max_level(log_level);
+
+    SimpleLogger::new().with_level(log_level).init()?;
 
     let global_dsn = config.dsn.and_then(|dsn| match Dsn::from_str(&dsn) {
         Ok(t) => Some(t),

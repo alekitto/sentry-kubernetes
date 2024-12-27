@@ -78,8 +78,14 @@ jobs:
 
             - name: Attest
               uses: actions/attest-build-provenance@v2
-              id: attest
               with:
-                subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                subject-name: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
+                subject-digest: ${{ steps.push.outputs.digest }}
+                push-to-registry: true
+
+            - name: Attest
+              uses: actions/attest-build-provenance@v2
+              with:
+                subject-name: public.ecr.aws/${{ github.repository_owner }}/${{ github.event.repository.name }}
                 subject-digest: ${{ steps.push.outputs.digest }}
                 push-to-registry: true
