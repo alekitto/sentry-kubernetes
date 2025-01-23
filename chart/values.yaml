@@ -1,5 +1,7 @@
 # Default values for sentry-kubernetes.
 
+# Useful when deploying as a subchart
+existingConfigMap: ""
 sentry:
   dsn: ~
   existingSecret: ~
