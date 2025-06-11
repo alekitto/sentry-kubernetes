@@ -50,7 +50,7 @@ impl<'de> Deserialize<'de> for Selectors {
         D: Deserializer<'de>,
     {
         struct SelectorVisitor;
-        impl<'de> Visitor<'de> for SelectorVisitor {
+        impl Visitor<'_> for SelectorVisitor {
             type Value = Selectors;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -81,7 +81,7 @@ impl Selector {
     pub fn matches<'a, I: Iterator<Item = (&'a str, &'a str)>>(&self, itr: I) -> bool {
         let mut matches = false;
         for (k, v) in itr {
-            if k != &self.key {
+            if k != self.key {
                 continue;
             }
 

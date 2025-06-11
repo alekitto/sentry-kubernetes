@@ -5,12 +5,12 @@ use crate::sentry_event::SentryEvent;
 use crate::GlobalConfiguration;
 use k8s_openapi::api::core::v1::Event;
 use log::debug;
+use sentry::transports::DefaultTransportFactory;
 use sentry::types::Dsn;
 use sentry::{Breadcrumb, Client, Hub, Integration, Level};
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
-use sentry::transports::DefaultTransportFactory;
 
 pub struct EventMonitor<F: Fn(&Hub, &SentryEvent)> {
     client: Arc<CachingClient>,
@@ -33,12 +33,15 @@ impl<F: Fn(&Hub, &SentryEvent)> EventMonitor<F> {
             .and_then(|s| Dsn::from_str(s).ok())
             .or_else(|| global_configuration.dsn.clone());
 
-
         let integrations = {
             // default integrations need to be ordered *before* custom integrations,
             // since they also process events in order
-            let mut integrations: Vec<Arc<dyn Integration>> = vec![];
-            integrations.push(Arc::new(sentry::integrations::contexts::ContextIntegration::default()));
+            let integrations: Vec<Arc<dyn Integration>> = vec![
+                Arc::new(
+                    sentry::integrations::contexts::ContextIntegration::default(),
+                )
+            ];
+
             integrations
         };
 
@@ -49,24 +52,16 @@ impl<F: Fn(&Hub, &SentryEvent)> EventMonitor<F> {
                     dsn: dsn.clone(),
                     transport: Some(Arc::new(DefaultTransportFactory)),
                     integrations,
-                    environment: if let Some(env) = configuration
+                    environment:configuration
                         .environment
                         .as_deref()
-                        .or_else(|| global_configuration.environment.as_deref())
-                    {
-                        Some(env.to_string().into())
-                    } else {
-                        None
-                    },
-                    release: if let Some(rel) = configuration
+                        .or(global_configuration.environment.as_deref())
+                        .map(|e| e.to_string().into()),
+                    release: configuration
                         .release
                         .as_deref()
-                        .or_else(|| global_configuration.release.as_deref())
-                    {
-                        Some(rel.to_string().into())
-                    } else {
-                        None
-                    },
+                        .or(global_configuration.release.as_deref())
+                        .map(|rel| rel.to_string().into()),
                     ..Default::default()
                 });
 
@@ -110,11 +105,9 @@ impl<F: Fn(&Hub, &SentryEvent)> EventMonitor<F> {
 
         let mut sentry_event = SentryEvent::from(event);
         let mut hostname = sentry_event.source_host.clone();
-        if hostname.is_none() {
-            if sentry_event.kind.as_deref() == Some("Pod") {
-                if let Some(pod) = self.client.get_pod(&sentry_event.name).await {
-                    hostname = pod.spec.and_then(|p| p.node_name);
-                }
+        if hostname.is_none() && sentry_event.kind.as_deref() == Some("Pod") {
+            if let Some(pod) = self.client.get_pod(&sentry_event.name).await {
+                hostname = pod.spec.and_then(|p| p.node_name);
             }
         }
 
@@ -248,6 +241,7 @@ mod tests {
                 dsn: None,
                 environment: None,
                 release: None,
+                historical: true,
                 levels: vec![],
             },
             Arc::new(CachingClient::new(client)),

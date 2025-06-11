@@ -1,6 +1,4 @@
-use crate::config::{ConfigMonitor, SentryConfig};
 use crate::monitor::{init_event_monitors, EventMonitorSubsystem};
-use ::config::{Config, Environment, File};
 use anyhow::Result;
 use clap::Parser;
 use futures::prelude::*;
@@ -8,11 +6,8 @@ use k8s_openapi::api::core::v1::Event;
 use k8s_openapi::chrono;
 use kube::runtime::{watcher, WatchStreamExt};
 use kube::{Api, Client};
-use log::{debug, warn, LevelFilter};
+use log::debug;
 use sentry::types::Dsn;
-use simple_logger::SimpleLogger;
-use std::path::PathBuf;
-use std::str::FromStr;
 use std::time::Duration;
 use tokio::select;
 use tokio_graceful_shutdown::{SubsystemBuilder, Toplevel};
@@ -42,78 +37,23 @@ pub struct GlobalConfiguration {
     pub environment: Option<String>,
     pub release: Option<String>,
     pub levels: Vec<String>,
+    pub historical: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let now = chrono::Utc::now();
 
-    let args = Args::parse();
-    let log_level = LevelFilter::from_str(&args.log_level).unwrap_or(LevelFilter::Warn);
-
-    let config: SentryConfig = Config::builder()
-        .add_source(
-            Environment::with_prefix("SENTRY")
-                .try_parsing(true)
-                .list_separator(",")
-                .with_list_parse_key("levels"),
-        )
-        .add_source(File::from(PathBuf::from(args.config)))
-        .set_default("log_level", Some(args.log_level))?
-        .set_default("historical", true)?
-        .build()?
-        .try_deserialize()?;
-
-    let log_level = config
-        .log_level
-        .and_then(|l| match LevelFilter::from_str(&l) {
-            Ok(l) => Some(l),
-            Err(e) => {
-                eprintln!("Unable to parse log level: {}", e);
-                None
-            }
-        })
-        .unwrap_or_else(|| log_level);
-
-    SimpleLogger::new().with_level(log_level).init()?;
-
-    let global_dsn = config.dsn.and_then(|dsn| match Dsn::from_str(&dsn) {
-        Ok(t) => Some(t),
-        Err(e) => {
-            warn!(r#"Global DSN is invalid ({}), ignoring"#, e.to_string());
-            None
-        }
-    });
-
-    let global_levels = config.levels;
-    let global_config = GlobalConfiguration {
-        dsn: global_dsn,
-        release: config.release,
-        environment: config.environment,
-        levels: if global_levels.is_empty() {
-            vec!["ERROR".to_string(), "WARNING".to_string()]
-        } else {
-            global_levels
-        },
-    };
-
-    let monitors_config = config.monitors;
-    let monitors_config = if monitors_config.is_empty() {
-        vec![ConfigMonitor::all()]
-    } else {
-        monitors_config
-    };
+    let (global_config, monitors_config) = config::parse_config()?;
 
     let (sender, _) = tokio::sync::broadcast::channel(512);
     let monitors = init_event_monitors(&global_config, monitors_config).await?;
 
-    let mut stream = watcher(
-        Api::<Event>::all(Client::try_default().await?),
-        Default::default(),
-    )
-    .default_backoff()
-    .applied_objects()
-    .boxed();
+    let kube_client = Client::try_default().await?;
+    let mut event_stream = watcher(Api::<Event>::all(kube_client.clone()), Default::default())
+        .default_backoff()
+        .applied_objects()
+        .boxed();
 
     Toplevel::<anyhow::Error>::new(move |s| async move {
         for (i, monitor) in monitors.into_iter().enumerate() {
@@ -123,10 +63,10 @@ async fn main() -> Result<()> {
             }));
         }
 
-        let mut historical = config.historical;
+        let mut historical = global_config.historical;
         loop {
             select! {
-                v = stream.try_next() => {
+                v = event_stream.try_next() => {
                     match v {
                         Ok(Some(e)) => {
                             if !historical {
@@ -134,12 +74,13 @@ async fn main() -> Result<()> {
                                 if t.0 < now {
                                     continue;
                                 }
+
+                                historical = true;
                             }
 
-                            historical = true;
                             let metadata = e.metadata.clone();
                             debug!(
-                                "changes detected for object {}/{}",
+                                "received event {}/{}",
                                 metadata.namespace.unwrap_or_default(),
                                 metadata.name.unwrap_or_default()
                             );
