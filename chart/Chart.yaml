@@ -2,8 +2,8 @@ apiVersion: v2
 name: sentry-kubernetes
 description: A Helm chart for sentry-kubernetes (https://github.com/alekitto/sentry-kubernetes)
 type: application
-version: 2.0.0-beta.5
-appVersion: 2.0.0-beta.5
+version: 2.0.0
+appVersion: 2.0.0
 home: https://github.com/alekitto/sentry-kubernetes
 icon: https://sentry-brand.storage.googleapis.com/sentry-glyph-white.png
 keywords:

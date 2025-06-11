@@ -21,7 +21,7 @@ static CLIENTS: LazyLock<Mutex<HashMap<Option<Dsn>, Arc<Hub>>>> =
 pub async fn init_event_monitors(
     global_configuration: &GlobalConfiguration,
     config: Vec<ConfigMonitor>,
-) -> Result<Vec<EventMonitor<impl Fn(&Hub, &SentryEvent)>>> {
+) -> Result<Vec<EventMonitor<impl Fn(&Hub, &SentryEvent) + use<>>>> {
     let mut monitors = vec![];
     let client = Arc::new(CachingClient::new(Client::try_default().await?));
     for config in config.into_iter() {
