@@ -173,7 +173,7 @@ impl From<&SentryEvent> for v7::Event<'_> {
         );
         extra.insert("node labels".to_string(), Value::Object(labels));
 
-        v7_event.extra = value.metadata_map();
+        v7_event.extra = extra;
         v7_event.fingerprint = fingerprint.into();
         v7_event.level = value.level;
         v7_event.tags = tags;
@@ -185,6 +185,7 @@ impl From<&SentryEvent> for v7::Event<'_> {
 #[cfg(test)]
 mod tests {
     use crate::sentry_event::SentryEvent;
+    use crate::sentry_event::v7;
     use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
     use k8s_openapi::chrono::DateTime;
@@ -253,5 +254,38 @@ mod tests {
         assert_eq!(sentry_event.level, Level::Warning);
         assert_eq!(sentry_event.level.to_string(), "warning");
         assert_eq!(sentry_event.type_, "warning");
+    }
+
+    #[test]
+    fn node_labels_included_in_extra() {
+        use std::collections::BTreeMap;
+        use serde_json::Value;
+
+        let se = SentryEvent {
+            uid: Default::default(),
+            type_: "warning".to_string(),
+            level: Level::Warning,
+            component: String::new(),
+            source_host: None,
+            reason: "Failed".to_string(),
+            metadata: ObjectMeta::default(),
+            namespace: "default".to_string(),
+            kind: None,
+            name: "obj".to_string(),
+            message: None,
+            creation_timestamp: None,
+            node_labels: BTreeMap::from([("role".to_string(), "worker".to_string())]),
+        };
+
+        let event: v7::Event<'_> = (&se).into();
+        let labels = event
+            .extra
+            .get("node labels")
+            .and_then(|v| v.as_object())
+            .expect("node labels missing");
+        assert_eq!(
+            labels.get("role"),
+            Some(&Value::String("worker".to_string()))
+        );
     }
 }
