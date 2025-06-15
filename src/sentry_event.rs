@@ -261,7 +261,7 @@ mod tests {
         use std::collections::BTreeMap;
         use serde_json::Value;
 
-        let mut se = SentryEvent {
+        let se = SentryEvent {
             uid: Default::default(),
             type_: "warning".to_string(),
             level: Level::Warning,
