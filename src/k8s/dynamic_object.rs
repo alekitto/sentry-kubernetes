@@ -1,8 +1,8 @@
 use crate::k8s::ApiResource;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use kube::Resource;
 use kube::api::TypeMeta;
 use kube::core::DynamicResourceScope;
-use kube::Resource;
 use std::borrow::Cow;
 
 /// A dynamic representation of a kubernetes object

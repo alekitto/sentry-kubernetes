@@ -4,7 +4,7 @@ use crate::{Args, GlobalConfiguration};
 use clap::Parser;
 use config::{Config, Environment, File};
 use k8s_openapi::api::core::v1::Event;
-use log::{warn, LevelFilter};
+use log::{LevelFilter, warn};
 use sentry::types::Dsn;
 use serde::Deserialize;
 use simple_logger::SimpleLogger;
@@ -34,10 +34,11 @@ impl ConfigResource {
         }) || self
             .kind
             .as_deref()
-            .is_some_and(|s| s != event.involved_object.kind.clone().unwrap_or_default()) || self
-            .namespace
-            .as_deref()
-            .is_some_and(|s| s != event.involved_object.namespace.clone().unwrap_or_default())
+            .is_some_and(|s| s != event.involved_object.kind.clone().unwrap_or_default())
+            || self
+                .namespace
+                .as_deref()
+                .is_some_and(|s| s != event.involved_object.namespace.clone().unwrap_or_default())
         {
             false
         } else if let Some(selectors) = self.label_selector.as_ref() {

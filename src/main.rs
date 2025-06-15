@@ -1,10 +1,10 @@
-use crate::monitor::{init_event_monitors, EventMonitorSubsystem};
+use crate::monitor::{EventMonitorSubsystem, init_event_monitors};
 use anyhow::Result;
 use clap::Parser;
 use futures::prelude::*;
 use k8s_openapi::api::core::v1::Event;
 use k8s_openapi::chrono;
-use kube::runtime::{watcher, WatchStreamExt};
+use kube::runtime::{WatchStreamExt, watcher};
 use kube::{Api, Client};
 use log::debug;
 use sentry::types::Dsn;
