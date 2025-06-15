@@ -49,7 +49,7 @@ rbac:
   # Specifies whether RBAC resources should be created
   create: true
 
-# Set priorityCLassName in deployment
+# Set priorityClassName in deployment
 # priorityClassName: ""
 
 podLabels: {}
