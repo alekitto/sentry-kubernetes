@@ -1,6 +1,6 @@
 use crate::selector::Operator::{In, NotIn};
 use serde::de::{Unexpected, Visitor};
-use serde::{de, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 use std::fmt::Formatter;
 
 mod parser;
@@ -91,11 +91,7 @@ impl Selector {
             }
         }
 
-        if self.negate {
-            !matches
-        } else {
-            matches
-        }
+        if self.negate { !matches } else { matches }
     }
 }
 

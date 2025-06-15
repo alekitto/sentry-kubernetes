@@ -1,11 +1,11 @@
 use k8s_openapi::api::core::v1::Event;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use lazy_static::lazy_static;
-use sentry::protocol::ClientSdkInfo;
-use sentry::types::protocol::v7;
-use sentry::types::Uuid;
 use sentry::Level;
-use serde_json::{to_value, Map, Value};
+use sentry::protocol::ClientSdkInfo;
+use sentry::types::Uuid;
+use sentry::types::protocol::v7;
+use serde_json::{Map, Value, to_value};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::env;
@@ -258,8 +258,8 @@ mod tests {
 
     #[test]
     fn node_labels_included_in_extra() {
-        use std::collections::BTreeMap;
         use serde_json::Value;
+        use std::collections::BTreeMap;
 
         let se = SentryEvent {
             uid: Default::default(),

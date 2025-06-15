@@ -1,8 +1,8 @@
+use crate::GlobalConfiguration;
 use crate::caching_client::CachingClient;
 use crate::config::ConfigMonitor;
 use crate::monitor::CLIENTS;
 use crate::sentry_event::SentryEvent;
-use crate::GlobalConfiguration;
 use k8s_openapi::api::core::v1::Event;
 use log::debug;
 use sentry::transports::DefaultTransportFactory;
@@ -36,11 +36,9 @@ impl<F: Fn(&Hub, &SentryEvent)> EventMonitor<F> {
         let integrations = {
             // default integrations need to be ordered *before* custom integrations,
             // since they also process events in order
-            let integrations: Vec<Arc<dyn Integration>> = vec![
-                Arc::new(
-                    sentry::integrations::contexts::ContextIntegration::default(),
-                )
-            ];
+            let integrations: Vec<Arc<dyn Integration>> = vec![Arc::new(
+                sentry::integrations::contexts::ContextIntegration::default(),
+            )];
 
             integrations
         };
@@ -52,7 +50,7 @@ impl<F: Fn(&Hub, &SentryEvent)> EventMonitor<F> {
                     dsn: dsn.clone(),
                     transport: Some(Arc::new(DefaultTransportFactory)),
                     integrations,
-                    environment:configuration
+                    environment: configuration
                         .environment
                         .as_deref()
                         .or(global_configuration.environment.as_deref())
@@ -150,16 +148,16 @@ impl<F: Fn(&Hub, &SentryEvent)> EventMonitor<F> {
 
 #[cfg(test)]
 mod tests {
+    use crate::GlobalConfiguration;
     use crate::caching_client::CachingClient;
     use crate::config::{ConfigMonitor, ConfigResource};
     use crate::monitor::event::EventMonitor;
-    use crate::GlobalConfiguration;
     use k8s_openapi::api::core::v1::{Event, EventSource, ObjectReference};
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, Time};
     use k8s_openapi::chrono::DateTime;
     use kube::{Client, Config};
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn generate_event() -> Event {
         Event {

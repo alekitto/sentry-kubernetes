@@ -1,14 +1,14 @@
+use crate::GlobalConfiguration;
 use crate::caching_client::CachingClient;
 use crate::config::ConfigMonitor;
 use crate::sentry_event::SentryEvent;
-use crate::GlobalConfiguration;
 use anyhow::Result;
 pub use event::EventMonitor;
 pub use event_subsystem::EventMonitorSubsystem;
 use kube::Client;
 use log::debug;
-use sentry::types::Dsn;
 use sentry::Hub;
+use sentry::types::Dsn;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 
