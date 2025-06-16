@@ -172,3 +172,73 @@ pub fn parse_config() -> anyhow::Result<(GlobalConfiguration, Vec<ConfigMonitor>
 
     Ok((global_config, monitors_config))
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use k8s_openapi::api::core::v1::{Event, ObjectReference};
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+    use kube::{Client, Config};
+
+    fn build_client() -> CachingClient {
+        let client =
+            Client::try_from(Config::new("https://localhost:6443/".try_into().unwrap())).unwrap();
+        CachingClient::new(client)
+    }
+
+    fn base_event() -> Event {
+        Event {
+            involved_object: ObjectReference {
+                api_version: Some("v1".to_string()),
+                kind: Some("Pod".to_string()),
+                name: Some("pod-1".to_string()),
+                namespace: Some("default".to_string()),
+                ..Default::default()
+            },
+            metadata: ObjectMeta::default(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn event_matches_success() {
+        let client = build_client();
+        let event = base_event();
+        let resource = ConfigResource {
+            api_version: Some("v1".to_string()),
+            kind: Some("Pod".to_string()),
+            namespace: Some("default".to_string()),
+            ..Default::default()
+        };
+
+        assert!(resource.event_matches(&event, &client).await);
+    }
+
+    #[tokio::test]
+    async fn event_matches_wrong_namespace() {
+        let client = build_client();
+        let mut event = base_event();
+        event.involved_object.namespace = Some("other".to_string());
+        let resource = ConfigResource {
+            namespace: Some("default".to_string()),
+            kind: Some("Pod".to_string()),
+            api_version: None,
+            label_selector: None,
+        };
+
+        assert!(!resource.event_matches(&event, &client).await);
+    }
+
+    #[tokio::test]
+    async fn event_matches_wrong_kind() {
+        let client = build_client();
+        let event = base_event();
+        let resource = ConfigResource {
+            kind: Some("Node".to_string()),
+            namespace: Some("default".to_string()),
+            api_version: None,
+            label_selector: None,
+        };
+
+        assert!(!resource.event_matches(&event, &client).await);
+    }
+}

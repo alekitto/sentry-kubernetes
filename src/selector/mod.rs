@@ -272,4 +272,39 @@ mod tests {
     fn from_str_invalid() {
         assert!(Selectors::try_from("invalid@@").is_err());
     }
+
+    #[test]
+    fn from_str_negation_and_set_based() {
+        let selector =
+            Selectors::try_from("!env in (prod, test), app notin (sentry)").expect("parse failed");
+
+        assert_eq!(selector.len(), 2);
+        assert_eq!(
+            selector.0.get(0).unwrap(),
+            &Selector {
+                negate: true,
+                key: "env".to_string(),
+                requirement: Some(Restriction {
+                    operator: Operator::In,
+                    values: vec!["prod".to_string(), "test".to_string()],
+                }),
+            }
+        );
+        assert_eq!(
+            selector.0.get(1).unwrap(),
+            &Selector {
+                negate: false,
+                key: "app".to_string(),
+                requirement: Some(Restriction {
+                    operator: Operator::NotIn,
+                    values: vec!["sentry".to_string()],
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn from_str_with_trailing_data_fails() {
+        assert!(Selectors::try_from("env=prod trailing").is_err());
+    }
 }
