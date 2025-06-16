@@ -19,12 +19,13 @@ impl TryFrom<&str> for Selectors {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value.is_empty() {
-            Ok(Self(vec![]))
-        } else {
-            match parser::root(value) {
-                Ok((_, selectors)) => Ok(selectors),
-                Err(e) => Err(e.to_owned().into()),
-            }
+            return Ok(Self(vec![]));
+        }
+
+        match parser::root(value) {
+            Ok((remaining, selectors)) if remaining.trim().is_empty() => Ok(selectors),
+            Ok(_) => Err(anyhow::anyhow!("invalid selector")),
+            Err(e) => Err(e.to_owned().into()),
         }
     }
 }
@@ -265,5 +266,10 @@ mod tests {
                 })
             }
         );
+    }
+
+    #[test]
+    fn from_str_invalid() {
+        assert!(Selectors::try_from("invalid@@").is_err());
     }
 }
